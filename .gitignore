@@ -1,0 +1,4 @@
+config/
+data/
+refs/
+src/mnist_result/
