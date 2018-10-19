@@ -2,12 +2,13 @@
 
 '''
 chainer練習用スクリプト
-3層全結合ネットワークによるmnistの学習
-2018.10.18 作成
+3層畳み込みネットワークによるcifarの学習
+2018.10.19 作成
 参考: https://qiita.com/mitmul/items/1e35fba085eb07a92560
 '''
 
 import argparse
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -15,7 +16,9 @@ import chainer
 import chainer.functions as F
 import chainer.links as L
 from chainer.datasets import mnist
+from chainer.datasets import cifar
 
+FILENAME = os.path.splitext(os.path.basename(__file__))[0]
 
 ################################################################################
 
@@ -23,28 +26,30 @@ class MyModel(chainer.Chain):
     def __init__(self, n_mid_units=100, n_out=10):
         super().__init__()
         with self.init_scope():
-            self.l1 = L.Linear(None, n_mid_units)
-            self.l2 = L.Linear(n_mid_units, n_mid_units)
-            self.l3 = L.Linear(n_mid_units, n_out)
+            self.conv1 = L.Convolution2D(None, 32, 3, 3, 1)
+            self.conv2 = L.Convolution2D(32, 64, 3, 3, 1)
+            self.conv3 = L.Convolution2D(64, 128, 3, 3, 1)
+            self.fc4 = L.Linear(None, 1000)
+            self.fc5 = L.Linear(1000, n_out)
 
     def __call__(self, x):
-        h1 = F.relu(self.l1(x))
-        h2 = F.relu(self.l2(h1))
-        return self.l3(h2)
-
-
-    def forward(self, x):
-        pass
+        h = F.relu(self.conv1(x))
+        h = F.relu(self.conv2(h))
+        h = F.relu(self.conv3(h))
+        h = F.relu(self.fc4(h))
+        h = self.fc5(h)
+        return h
 
 
 ################################################################################
 
 def sample0():
     # データセットの準備
-    train_val, test = mnist.get_mnist(withlabel=True, ndim=1)
+    train_val, test = cifar.get_cifar10()
 
     # Validation用データセットを作る
-    train, valid = chainer.datasets.split_dataset_random(train_val, 50000, seed=0)
+    train_size = int(len(train_val) * 0.9)
+    train, valid = chainer.datasets.split_dataset_random(train_val, train_size, seed=0)
 
     # Iteratorの作成
     # SerialIteratorはデータセットの中のデータを順番に取り出してくる
@@ -75,18 +80,26 @@ def sample0():
     # Trainerの準備
     max_epoch = 10
     trainer = chainer.training.Trainer(
-        updater, (max_epoch, 'epoch'), out='mnist_result')
+        updater, (max_epoch, 'epoch'), out=f'result/{FILENAME}')
 
     # TrainerにExtensionを追加する
+    # trainer.extend(chainer.training.extensions.LogReport())
+    # trainer.extend(chainer.training.extensions.snapshot(filename='snapshot_epoch-{.updater.epoch}'))
+    # trainer.extend(chainer.training.extensions.Evaluator(valid_iter, model, device=gpu_id), name='val')
+    # trainer.extend(chainer.training.extensions.PrintReport(['epoch', 'main/loss', 'main/accuracy', 'val/main/loss', 'val/main/accuracy', 'l1/W/data/std', 'elapsed_time']))
+    # trainer.extend(chainer.training.extensions.ParameterStatistics(model.predictor.l1, {'std': np.std}))
+    # trainer.extend(chainer.training.extensions.PlotReport(['l1/W/data/std'], x_key='epoch', file_name='std.png'))
+    # trainer.extend(chainer.training.extensions.PlotReport(['main/loss', 'val/main/loss'], x_key='epoch', file_name='loss.png'))
+    # trainer.extend(chainer.training.extensions.PlotReport(['main/accuracy', 'val/main/accuracy'], x_key='epoch', file_name='accuracy.png'))
+    # trainer.extend(chainer.training.extensions.dump_graph('main/loss'))
+
     trainer.extend(chainer.training.extensions.LogReport())
-    trainer.extend(chainer.training.extensions.snapshot(filename='snapshot_epoch-{.updater.epoch}'))
+    trainer.extend(chainer.training.extensions.observe_lr())
     trainer.extend(chainer.training.extensions.Evaluator(valid_iter, model, device=gpu_id), name='val')
-    trainer.extend(chainer.training.extensions.PrintReport(['epoch', 'main/loss', 'main/accuracy', 'val/main/loss', 'val/main/accuracy', 'l1/W/data/std', 'elapsed_time']))
-    trainer.extend(chainer.training.extensions.ParameterStatistics(model.predictor.l1, {'std': np.std}))
-    trainer.extend(chainer.training.extensions.PlotReport(['l1/W/data/std'], x_key='epoch', file_name='std.png'))
+    trainer.extend(chainer.training.extensions.PrintReport(['epoch', 'main/loss', 'main/accuracy', 'val/main/loss', 'val/main/accuracy', 'elapsed_time', 'lr']))
     trainer.extend(chainer.training.extensions.PlotReport(['main/loss', 'val/main/loss'], x_key='epoch', file_name='loss.png'))
     trainer.extend(chainer.training.extensions.PlotReport(['main/accuracy', 'val/main/accuracy'], x_key='epoch', file_name='accuracy.png'))
-    trainer.extend(chainer.training.extensions.dump_graph('main/loss'))
+
 
     # 学習を開始する
     trainer.run()
@@ -100,11 +113,11 @@ def sample0():
 
 def sample1(gpu_id=-1):
     # データセットの準備
-    train_val, test = mnist.get_mnist(withlabel=True, ndim=1)
+    train_val, test = cifar.get_cifar10(withlabel=True, ndim=1)
 
     model = MyModel()
     chainer.serializers.load_npz(
-        'mnist_result/snapshot_epoch-10',
+        f'result/{FILENAME}/snapshot_epoch-10',
         model, path='updater/model:main/predictor/')
 
     if gpu_id >= 0:
@@ -142,14 +155,19 @@ def predict(model, image_id):
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('mode', default='0',
-                        help='program mode')
+    parser.add_argument('mode', nargs='?', default='', choices=['', '0', '1'],
+                        help='Number of main procedure')
+    parser.add_argument('-test',  action='store_true',
+                        help='Run as test mode')
     args = parser.parse_args()
     return args
 
 
 def main():
     args = get_args()
+    if args.test:
+        __test__()
+        return
     if args.mode == '0':
         sample0()
     elif args.mode == '1':

@@ -8,6 +8,7 @@ chainer練習用スクリプト
 '''
 
 import argparse
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -16,6 +17,7 @@ import chainer.functions as F
 import chainer.links as L
 from chainer.datasets import mnist
 
+FILENAME = os.path.splitext(os.path.basename(__file__))[0]
 
 ################################################################################
 
@@ -75,7 +77,7 @@ def sample0():
     # Trainerの準備
     max_epoch = 10
     trainer = chainer.training.Trainer(
-        updater, (max_epoch, 'epoch'), out='mnist_result')
+        updater, (max_epoch, 'epoch'), out=f'result/{FILENAME}')
 
     # TrainerにExtensionを追加する
     trainer.extend(chainer.training.extensions.LogReport())
@@ -104,7 +106,7 @@ def sample1(gpu_id=-1):
 
     model = MyModel()
     chainer.serializers.load_npz(
-        'mnist_result/snapshot_epoch-10',
+        f'result/{FILENAME}/snapshot_epoch-10',
         model, path='updater/model:main/predictor/')
 
     if gpu_id >= 0:
@@ -140,20 +142,30 @@ def predict(model, image_id):
 
 ################################################################################
 
+def __test__():
+    print(FILENAME)
+
+
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('mode', default='0',
-                        help='program mode')
+    parser.add_argument('mode', nargs='?', default='', choices=['', '0', '1'],
+                        help='Number of main procedure')
+    parser.add_argument('-test',  action='store_true',
+                        help='Run as test mode')
     args = parser.parse_args()
     return args
 
 
 def main():
     args = get_args()
+    if args.test:
+        __test__()
+        return
     if args.mode == '0':
         sample0()
     elif args.mode == '1':
         sample1()
+
 
 
 if __name__ == '__main__':
