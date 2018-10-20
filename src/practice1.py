@@ -41,15 +41,27 @@ class MyModel(chainer.Chain):
         return h
 
 
+class WrapperModel(chainer.Chain):
+    ''' Point!
+    with self.init_scope()内にあるLink以外はパラメータが更新されない
+    '''
+    def __init__(self, model):
+        super().__init__()
+        self.submodel = model
+
+    def __call__(self, x):
+        return self.submodel(x)
+
 ################################################################################
 
-def sample0():
+def sample0(gpu_id=-1):
     # データセットの準備
-    train_val, test = cifar.get_cifar10()
+    train_val, test = cifar.get_cifar10() # => (50000, 2), (10000, 2)
 
     # Validation用データセットを作る
     train_size = int(len(train_val) * 0.9)
-    train, valid = chainer.datasets.split_dataset_random(train_val, train_size, seed=0)
+    train, valid = chainer.datasets.split_dataset_random(
+        train_val, train_size, seed=0)
 
     # Iteratorの作成
     # SerialIteratorはデータセットの中のデータを順番に取り出してくる
@@ -61,7 +73,6 @@ def sample0():
         test, batchsize, repeat=False, shuffle=False)
 
     # ネットワークの定義
-    gpu_id = -1
     model = MyModel()
     if gpu_id >= 0:
         model.to_gpu(gpu_id)
@@ -75,16 +86,20 @@ def sample0():
         alpha=0.001, beta1=0.9, beta2=0.999, eps=1e-08, eta=1.0).setup(model)
 
     # Updaterの準備 (パラメータを更新)
-    updater = chainer.training.StandardUpdater(train_iter, optimizer, device=gpu_id)
+    updater = chainer.training.StandardUpdater(
+       train_iter, optimizer, device=gpu_id)
 
     # Trainerの準備
     max_epoch = 10
     trainer = chainer.training.Trainer(
-        updater, (max_epoch, 'epoch'), out=f'result/{FILENAME}')
+        updater, stop_trigger=(max_epoch, 'epoch'), out=f'result/{FILENAME}')
 
     # TrainerにExtensionを追加する
-    # trainer.extend(chainer.training.extensions.LogReport())
-    # trainer.extend(chainer.training.extensions.snapshot(filename='snapshot_epoch-{.updater.epoch}'))
+    trainer.extend(chainer.training.extensions.LogReport())
+
+    # トレーナーオブジェクトをシリアライズし、出力ディレクトリに保存
+    trainer.extend(chainer.training.extensions.snapshot(filename='snapshot_epoch-{.updater.epoch}'))
+
     # trainer.extend(chainer.training.extensions.Evaluator(valid_iter, model, device=gpu_id), name='val')
     # trainer.extend(chainer.training.extensions.PrintReport(['epoch', 'main/loss', 'main/accuracy', 'val/main/loss', 'val/main/accuracy', 'l1/W/data/std', 'elapsed_time']))
     # trainer.extend(chainer.training.extensions.ParameterStatistics(model.predictor.l1, {'std': np.std}))
@@ -93,12 +108,18 @@ def sample0():
     # trainer.extend(chainer.training.extensions.PlotReport(['main/accuracy', 'val/main/accuracy'], x_key='epoch', file_name='accuracy.png'))
     # trainer.extend(chainer.training.extensions.dump_graph('main/loss'))
 
-    trainer.extend(chainer.training.extensions.LogReport())
     trainer.extend(chainer.training.extensions.observe_lr())
     trainer.extend(chainer.training.extensions.Evaluator(valid_iter, model, device=gpu_id), name='val')
     trainer.extend(chainer.training.extensions.PrintReport(['epoch', 'main/loss', 'main/accuracy', 'val/main/loss', 'val/main/accuracy', 'elapsed_time', 'lr']))
     trainer.extend(chainer.training.extensions.PlotReport(['main/loss', 'val/main/loss'], x_key='epoch', file_name='loss.png'))
     trainer.extend(chainer.training.extensions.PlotReport(['main/accuracy', 'val/main/accuracy'], x_key='epoch', file_name='accuracy.png'))
+
+    ''' extensionを自作 '''
+    def myextension(trainer):
+        print(trainer)
+    myextension.trigger = (1, 'epoch')
+
+    trainer.extend(myextension)
 
 
     # 学習を開始する
@@ -153,6 +174,14 @@ def predict(model, image_id):
 
 ################################################################################
 
+def __test__():
+    # ex = chainer.training.extensions.PrintReport([])
+    # print(dir(ex))
+    # print(ex.trigger)
+    self.at = 'at'
+    print(dir(__test__))
+
+
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('mode', nargs='?', default='', choices=['', '0', '1'],
@@ -169,9 +198,9 @@ def main():
         __test__()
         return
     if args.mode == '0':
-        sample0()
+        sample0(gpu_id=0)
     elif args.mode == '1':
-        sample1()
+        sample1(gpu_id=0)
 
 
 if __name__ == '__main__':
