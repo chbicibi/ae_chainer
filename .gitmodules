@@ -1,6 +1,3 @@
 [submodule "src/lib"]
 	path = src/lib
 	url = https://github.com/chbicibi/mylib
-[submodule "refs/nyk510"]
-	path = refs/nyk510
-	url = https://github.com/nyk510/Chainer

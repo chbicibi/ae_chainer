@@ -116,12 +116,21 @@ def sample1(gpu_id=-1):
     # plt.imshow(x.reshape(28, 28), cmap='gray')
     # plt.show()
 
+    print(type(x))
+
+    # ネットワークと同じデバイス上にデータを送る
     x = model.xp.asarray(x[None, ...])
+    print(type(x))
+
     with chainer.using_config('train', False), chainer.using_config('enable_backprop', False):
         y = model(x)
+    print(type(y))
 
-    # y_array = chainer.cuda.to_cpu(y.array)
-    y_array = y.array
+    if gpu_id >= 0:
+        # 結果をCPUに送る
+        y_array = chainer.cuda.to_cpu(y.array)
+    else:
+        y_array = y.array
 
     print('予測ラベル:', y_array.argmax(axis=1)[0])
 
@@ -162,9 +171,9 @@ def main():
         __test__()
         return
     if args.mode == '0':
-        sample0()
+        sample0(0)
     elif args.mode == '1':
-        sample1()
+        sample1(0)
 
 
 

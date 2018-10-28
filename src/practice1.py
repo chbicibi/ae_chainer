@@ -26,7 +26,7 @@ class MyModel(chainer.Chain):
     def __init__(self, n_mid_units=100, n_out=10):
         super().__init__()
         with self.init_scope():
-            self.conv1 = L.Convolution2D(None, 32, 3, 3, 1)
+            self.conv1 = L.Convolution2D(None, 32, ksize=3, stride=3, pad=1)
             self.conv2 = L.Convolution2D(32, 64, 3, 3, 1)
             self.conv3 = L.Convolution2D(64, 128, 3, 3, 1)
             self.fc4 = L.Linear(None, 1000)
@@ -57,6 +57,12 @@ class WrapperModel(chainer.Chain):
 def sample0(gpu_id=-1):
     # データセットの準備
     train_val, test = cifar.get_cifar10() # => (50000, 2), (10000, 2)
+
+    print(type(train_val)) # chainer.datasets.tuple_dataset.TupleDataset
+    print(type(train_val[0])) # tuple
+    print(type(train_val[0][0])) # numpy.ndarray
+    print(type(train_val[0][1])) # numpy.int32
+    return
 
     # Validation用データセットを作る
     train_size = int(len(train_val) * 0.9)
@@ -148,12 +154,17 @@ def sample1(gpu_id=-1):
     # plt.imshow(x.reshape(28, 28), cmap='gray')
     # plt.show()
 
+    # ネットワークと同じデバイス上にデータを送る
     x = model.xp.asarray(x[None, ...])
+
     with chainer.using_config('train', False), chainer.using_config('enable_backprop', False):
         y = model(x)
 
-    # y_array = chainer.cuda.to_cpu(y.array)
-    y_array = y.array
+    if gpu_id >= 0:
+        # 結果をCPUに送る
+        y_array = chainer.cuda.to_cpu(y.array)
+    else:
+        y_array = y.array
 
     print('予測ラベル:', y_array.argmax(axis=1)[0])
 
@@ -175,11 +186,9 @@ def predict(model, image_id):
 ################################################################################
 
 def __test__():
-    # ex = chainer.training.extensions.PrintReport([])
-    # print(dir(ex))
-    # print(ex.trigger)
-    self.at = 'at'
-    print(dir(__test__))
+    model = MyModel()
+    s = model.conv2.W.shape
+    print(s)
 
 
 def get_args():
