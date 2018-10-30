@@ -9,9 +9,9 @@ chainer練習用スクリプト
 
 import argparse
 import os
+from functools import reduce
 import numpy as np
 import matplotlib.pyplot as plt
-from functools import reduce
 
 import chainer
 import chainer.functions as F
@@ -20,7 +20,7 @@ from chainer.datasets import mnist, cifar, split_dataset_random
 from chainer.datasets.tuple_dataset import TupleDataset
 from chainer.iterators import SerialIterator
 from chainer.optimizers import Adam
-from chainer.training import extensions, StandardUpdater, Trainer
+from chainer.training import StandardUpdater, Trainer, extensions
 
 FILENAME = os.path.splitext(os.path.basename(__file__))[0]
 
@@ -145,6 +145,7 @@ def sample0(gpu_id=-1):
 
     ## ログ記録 (他のextensionsの結果も含まれる)
     trainer.extend(extensions.LogReport())
+    trainer.extend(extensions.LogReport(['main/loss', 'val/main/loss'], log_name='loss'))
 
     ## 学習経過を画像
     trainer.extend(extensions.PlotReport(['conv/W/data/std', 'conv/b/data/std'], x_key='epoch', file_name='std.png'))
