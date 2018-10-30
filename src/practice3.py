@@ -322,6 +322,8 @@ def get_args():
 
 
 def main():
+    global DEVICE
+
     args = get_args()
     DEVICE = args.gpu
     if DEVICE >= 0:
