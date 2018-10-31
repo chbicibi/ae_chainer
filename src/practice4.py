@@ -2,9 +2,9 @@
 
 '''
 chainer練習用スクリプト
-3層畳み込みネットワークによるcifarの学習
-事前学習を取り入れる
-2018.10.29 作成
+3層畳み込みネットワークによる自作データ
+大きな入力に対応できるか確認
+2018.10.31 作成
 '''
 
 import argparse
@@ -32,6 +32,7 @@ FILENAME = os.path.splitext(os.path.basename(__file__))[0]
 OS = os.environ.get('OS')
 OS_WIN = OS == 'Windows_NT'
 DEVICE = 0
+PROGRESSBAR = True
 
 ################################################################################
 
@@ -122,6 +123,20 @@ class CAEList(chainer.ChainList):
 
 ################################################################################
 
+class TestDataset(chainer.dataset.DatasetMixin):
+    def __init__(self):
+        pass
+
+    def __len__(self):
+        return 2000
+
+    def get_example(self, i):
+        a = np.zeros((3, 320, 320), dtype=np.float32)
+        return a, a
+
+
+################################################################################
+
 def train_model(model, train_iter, valid_iter, epoch=10, out=f'result/{FILENAME}', fix_trained=False):
     # ネットワークをClassifierで包んで、ロスの計算などをモデルに含める
     # L.Classifierはpredictorというattributeに持ち、ロス計算を行う機能を追加する
@@ -162,7 +177,7 @@ def train_model(model, train_iter, valid_iter, epoch=10, out=f'result/{FILENAME}
     trainer.extend(extensions.PrintReport(['epoch', 'main/loss', 'val/main/loss', 'elapsed_time', 'lr']))
 
     ## プログレスバー
-    if OS_WIN:
+    if PROGRESSBAR:
         trainer.extend(extensions.ProgressBar())
 
     ## ログ記録 (他のextensionsの結果も含まれる)
@@ -193,12 +208,13 @@ def train_model(model, train_iter, valid_iter, epoch=10, out=f'result/{FILENAME}
 
 def get_train_data():
     # データセットの準備
-    train_val, test = cifar.get_cifar10() # => (50000, 2), (10000, 2)
+    # train_val, test = cifar.get_cifar10() # => (50000, 2), (10000, 2)
 
     # データセットの修正 (教師データを学習データで置き換え)
     # testは使わない
-    train_val_data = [x[0] for x in train_val]
-    train_val = TupleDataset(train_val_data, train_val_data)
+    # train_val_data = np.zeros((1000, 3, 320, 320), dtype=np.float32)
+    # train_val = TupleDataset(train_val_data, train_val_data)
+    train_val = TestDataset()
 
     # Validation用データセットを作る
     train_size = int(len(train_val) * 0.9)
@@ -209,7 +225,8 @@ def get_train_data():
     batchsize = 128
     train_iter = SerialIterator(train, batchsize)
     valid_iter = SerialIterator(valid, batchsize, repeat=False, shuffle=False)
-    test_iter = SerialIterator(test, batchsize, repeat=False, shuffle=False)
+    # test_iter = SerialIterator(test, batchsize, repeat=False, shuffle=False)
+    test_iter = None
 
     return train_iter, valid_iter, test_iter
 
@@ -244,7 +261,8 @@ def sample0(out=f'result/{FILENAME}', clear=False):
     if clear:
         shutil.rmtree(out, ignore_errors=True)
 
-    train_model(model, train_iter, valid_iter, epoch=50*len(model),
+    train_model(model, train_iter, valid_iter,
+                epoch=1,
                 out=f'{out}/all',
                 fix_trained=False)
 
@@ -267,7 +285,8 @@ def sample01(out=f'result/{FILENAME}', clear=False):
             path = f'updater/model:main/predictor/{i}/'
             chainer.serializers.load_npz(file, m, path)
         else:
-            train_model(model, train_iter, valid_iter, epoch=50,
+            train_model(model, train_iter, valid_iter,
+                        epoch=50,
                         out=f'{out}/step{i+1}',
                         fix_trained=False)
 
@@ -344,6 +363,8 @@ def get_args():
                         help='Directory to output the result')
     parser.add_argument('--clear', '-c', action='store_true',
                         help='Remove directory at the beginning')
+    parser.add_argument('--no-progress', '-p', action='store_true',
+                        help='Hide progress bar')
     parser.add_argument('--test', '-t', action='store_true',
                         help='Run as test mode')
     args = parser.parse_args()
@@ -355,8 +376,9 @@ def main():
 
     args = get_args()
     DEVICE = args.gpu
-    if DEVICE >= 0:
-        chainer.cuda.get_device_from_id(0).use()
+    # if DEVICE >= 0:
+    #     chainer.cuda.get_device_from_id(0).use()
+    PROGRESSBAR = not args.no_progress
 
     # out = args.out
     out = f'result/{FILENAME}'
