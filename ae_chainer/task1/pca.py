@@ -1,4 +1,3 @@
-
 import argparse
 import os
 import shutil
@@ -13,7 +12,7 @@ from matplotlib import colors as plc
 from mpl_toolkits.mplot3d import Axes3D
 from sklearn import decomposition
 
-import dataset
+import dataset as D_
 
 
 ################################################################################

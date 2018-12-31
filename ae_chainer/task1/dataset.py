@@ -1,9 +1,3 @@
-#! /usr/bin/env python3
-
-'''
-Abstruct
-'''
-
 import argparse
 import configparser
 import os
@@ -14,16 +8,143 @@ import matplotlib.pyplot as plt
 
 import myutils as ut
 
+import common as C_
 
-SRC_DIR = os.path.dirname(__file__)
-LOCAL_DIR = os.path.join(SRC_DIR, '../../__local__')
-# PATH_INI = os.path.join(LOCAL_DIR, 'path.ini')
-PATH_INI = os.path.join(SRC_DIR, 'path1.ini')
 
+DEBUG0 = False
+
+
+################################################################################
+# 学習イテレータ
+################################################################################
+
+class CFDBase(object):
+    ''' 生のCFDデータを返すイテラブルオブジェクト '''
+
+    def __init__(self, datapath, grid_path=None, size=None, cache=False):
+        files = get_filenames(datapath)
+        self.files = files
+
+        self.len = len(files)
+        if size and size < self.len:
+            self.len = size
+
+        if cache:
+            self.data = [None] * self.len
+        else:
+            self.data = None
+
+        if not grid_path:
+            grid_path = os.path.join(datapath, '../grid.csv')
+        self.grid_path = grid_path
+        self.grid = None
+
+    def __len__(self):
+        return self.len
+
+    def __getitem__(self, key):
+        if type(key) is slice:
+            return [self[i] for i in range(*key.indices(self.len))]
+
+        else:
+            if key >= self.len:
+                raise IndexError
+            if not self.data:
+                return self.get_data(key)
+            if self.data[key] is None:
+                self.data[key] = self.get_data(key)
+            return self.data[key] # (u, v, p, f, w)
+
+        # else:
+        #     print(type(key))
+        #     raise TypeError
+
+    def get_grid(self, dtype=np.float32):
+        if not self.grid:
+            self.grid = np.loadtxt(self.grid_path, delimiter=',', dtype=dtype)
+        return self.grid # (height, width), data = 0 or 1
+
+    def get_data(self, key):
+        if DEBUG0:
+            print(f'load(org) {key}/{self.len}', ' '*20, end='\r')
+        return np.load(self.files[key])
+
+
+class MemoizeMapList(object):
+    ''' 入力イテラブルを加工するイテラブルオブジェクト '''
+
+    def __init__(self, fn, it, name='', cache=False, cache_path=None):
+        self.name = name
+        self.fn = fn
+        self.it = it
+        self.len = len(it)
+
+        if cache:
+            self.data = [None] * self.len
+        else:
+            self.data = None
+
+        if cache_path:
+            abspath = os.path.abspath(cache_path)
+            os.makedirs(abspath, exist_ok=True)
+            self.cache_path = abspath
+        else:
+            self.cache_path = None
+
+    def __len__(self):
+        return self.len
+
+    def __getitem__(self, key):
+        if type(key) is slice:
+            return [self[i] for i in range(*key.indices(self.len))]
+
+        else: # int or np.int32
+            if not self.data:
+                return self.get_data(key)
+
+            if self.data[key] is None:
+                self.data[key] = self.get_data(key)
+
+            return self.data[key]
+
+        # else:
+        #     print(type(key))
+        #     raise TypeError
+
+    def get_data(self, key):
+        if self.cache_path:
+            if self.name:
+                file = f'cache_{self.name}_{key}.npy'
+            else:
+                file = f'cache_{key}.npy'
+            path = os.path.join(self.cache_path, file)
+
+            if os.path.isfile(path):
+                if DEBUG0:
+                    print(f'load(cache) {key}/{self.len}', ' '*20, end='\r')
+                return np.load(path)
+            else:
+                data = self.load_data(key)
+                np.save(path, data)
+                return data
+
+        else:
+            return self.load_data(key)
+
+    def load_data(self, key):
+        if self.fn:
+            return self.fn(self.it[key])
+        else:
+            return self.it[key]
+
+
+################################################################################
+# データの場所を取得
+################################################################################
 
 def get_datapath(key=None):
     config = configparser.ConfigParser()
-    config.read(PATH_INI)
+    config.read(C_.PATH_INI)
     if key:
         if key not in config['DATASET1']:
             raise KeyError
@@ -46,58 +167,41 @@ def get_filenames(path):
     return a
 
 
-class CFDBase(object):
-    def __init__(self, key=None, grid_path=None, cache=False, size=None):
-        datapath = get_datapath(key)
-        files = get_filenames(datapath)
-        self.files = files
-        self.len = len(files)
-        if size and size < self.len:
-            self.len = size
-        if cache:
-            self.data = [None] * self.len
-        else:
-            self.data = None
+################################################################################
+# データオブジェクトを取得
+################################################################################
 
-        if not grid_path:
-            grid_path = os.path.join(datapath, '../grid.csv')
-        self.grid_path = grid_path
-        self.grid = None
-
-    def __len__(self):
-        return self.len
-
-    def __getitem__(self, key):
-        if key >= self.len:
-            raise IndexError
-        if not self.data:
-            return np.load(self.files[key])
-        if self.data[key] is None:
-            self.data[key] = np.load(self.files[key])
-        return self.data[key] # (u, v, p, f, w)
-
-    def get_grid(self, dtype=np.float32):
-        if not self.grid:
-            self.grid = np.loadtxt(self.grid_path, delimiter=',', dtype=dtype)
-        return self.grid # (height, width), data = 0 or 1
+def get_original_data(key, *args, **kwargs):
+    datapath = get_datapath(key)
+    return CFDBase(datapath, *args, **kwargs)
 
 
-class MemoList(object):
-    def __init__(self, it, fn, cache_path=None):
-        self.it = it
-        self.fn = fn
-        self.data = [None] * len(it)
-        if cache_path:
-            os.makedirs(cache_path, exist_ok=True)
-            self.cache_path = cache_path
+def get_train_data(*args, **kwargs):
+    return MemoizeMapList(*args, **kwargs)
 
-    def __len__(self):
-        return len(self.it)
 
-    def __getitem__(self, key):
-        if self.data[key] is None:
-            self.data[key] = self.fn(self.it[key])
-        return self.data[key]
+################################################################################
+# データを加工(オリジナル→) # frame => (H, W, C=[u, v, p, f, w])
+################################################################################
+
+def extract_uv(frame):
+    return frame[:, :, :2]
+
+
+def extract_uv_norm(frame):
+    vmin = -1.0
+    vmax = 1.7
+    a = frame[:, :, :2]
+    a = (a - vmin) / (vmax - vmin)
+    return a
+
+
+def extract_uv_sq_norm(frame):
+    vmin = -1.7 # -1.0
+    vmax = 1.7
+    a = frame[:, 256:768, :2]
+    a = (a - vmin) / (vmax - vmin)
+    return a.transpose(2, 0, 1) # => (H, W, C) -> (C, H, W)
 
 
 ################################################################################
@@ -141,17 +245,6 @@ def main():
     if args.test:
         __test__()
         return
-
-    file = args.out
-
-    if not os.path.splitext(file)[1] == '.py':
-        file = file + '.py'
-
-    if not args.force and os.path.exists(file):
-        return
-
-    shutil.copy(__file__, file)
-    print('create:', file)
 
 
 if __name__ == '__main__':
