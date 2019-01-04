@@ -11,18 +11,18 @@ import net as N_
 
 class VAELoss(chainer.Chain, N_.AEBase):
 
-    def __init__(self, link, beta=1.0, k=1):
+    def __init__(self, predictor, beta=1.0, k=1):
         super().__init__()
         self.beta = beta
         self.k = k
-        n_latent = link.n_latent
+        n_latent = predictor.n_latent
 
         with self.init_scope():
-            self.link = link
+            self.link = predictor
+            # self.predictor = predictor
             self.prior = Prior(n_latent)
 
         self.n_latent = n_latent
-        self.predictor = link
         self.adjust()
 
     def __call__(self, x, x_=None, **kwargs):
@@ -44,12 +44,12 @@ class VAELoss(chainer.Chain, N_.AEBase):
         # print('p_x shape:', p_x.batch_shape)
         # print('x_ext shape:', x_ext.shape)
 
-        reconstr = self.mean(p_x.log_prob(x_ext))
+        reconstr = self.batch_mean(p_x.log_prob(x_ext))
 
         # reconstr = F.mean(F.sum(p_x.log_prob(
         #     F.broadcast_to(x[None, ...], (self.k, *x.shape))), axis=-1))
 
-        kl_penalty = self.mean(chainer.kl_divergence(q_z, p_z))
+        kl_penalty = self.batch_mean(chainer.kl_divergence(q_z, p_z))
 
         loss = - (reconstr - self.beta * kl_penalty)
         reporter.report({'loss': loss}, self)
@@ -58,11 +58,11 @@ class VAELoss(chainer.Chain, N_.AEBase):
         return loss
 
     def encode(self, x, **kwargs):
-        q_z = self.link.encode(x, **kwargs)
+        q_z = self.predictor.encode(x, **kwargs)
         return q_z
 
     def decode(self, x, **kwargs):
-        y = self.link.decode(x, **kwargs)
+        y = self.predictor.decode(x, **kwargs)
         p_x = D.Bernoulli(logit=y)
         return p_x
 
@@ -70,8 +70,12 @@ class VAELoss(chainer.Chain, N_.AEBase):
         z = q_z.sample(self.k)
         return z.reshape((-1, *z.shape[2:]))
 
-    def mean(self, v):
+    def batch_mean(self, v):
         return F.mean(F.sum(v, axis=tuple(range(1, v.ndim))))
+
+    @property
+    def predictor(self):
+        return self.link
 
 
 ################################################################################
@@ -109,17 +113,21 @@ class VAEChain(chainer.Chain, N_.AEBase):
         self.maybe_init(self.in_shape)
 
         x_ = x.reshape(-1, self.in_size)
-        try:
-            mu = self.mu(x_)
-            ln_sigma = self.ln_sigma(x_)  # log(sigma)
-            y = D.Normal(loc=mu, log_scale=ln_sigma)
-        except:
-            print(x_.shape)
-            raise
+        # try:
+        mu = self.mu(x_)
+            # y = D.Normal(loc=mu, log_scale=ln_sigma)
+        # except:
+        #     print(x_.shape)
+        #     raise
 
         if kwargs.get('show_shape'):
-            print(f'layer(E{self.name}): in: {x.shape} out: {y.batch_shape}')
-        return y
+            print(f'layer(E{self.name}): in: {x.shape} out: {mu.shape}')
+
+        if kwargs.get('inference'):
+            return mu # == D.Normal(loc=mu, log_scale=ln_sigma).mean
+        else:
+            ln_sigma = self.ln_sigma(x_)  # log(sigma)
+            return D.Normal(loc=mu, log_scale=ln_sigma)
 
     def decode(self, x, **kwargs):
         y = self.dec(x)
@@ -130,6 +138,11 @@ class VAEChain(chainer.Chain, N_.AEBase):
         if kwargs.get('show_shape'):
             print(f'layer(D{self.name}): in: {x.shape} out: {y.shape}')
         return y
+
+        # if kwargs.get('inference'):
+        #     return F.sigmoid(y) # == D.Bernoulli(logit=y).mean
+        # else:
+        #     return D.Bernoulli(logit=y)
 
     def maybe_init(self, in_size_):
         if self.init:

@@ -253,6 +253,16 @@ def __test__():
     print(chainer.kl_divergence(d0, d1))
 
 
+def __test__():
+    a = np.random.random(3)
+    d0 = D.Normal(loc=a, scale=np.array([1, 1, 1], dtype=np.float32))
+    b0 = D.Bernoulli(logit=a)
+    print(a)
+    print(d0.mean)
+    print(b0.mean)
+    print(F.sigmoid(a))
+
+
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('case', nargs='?', default='',

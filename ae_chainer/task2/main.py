@@ -32,18 +32,10 @@ SRC_FILENAME = os.path.splitext(SRC_FILE)[0]
 
 ################################################################################
 
-def task0(key, modelname, out):
-    ''' オートエンコーダ学習 '''
-
-    # 学習パラメータ定義
-    epoch = 200
-    batchsize = 25
-    out = f'{out}/res_{key}_{modelname}_{ut.snow}'
-
+def get_task_data(key, modelname, batchsize=1):
     # 学習データ作成
-    # key = 'plate_00'
     cache_path = f'__cache__/{key}'
-    original_data = D_.get_original_data(key, size=2000) # (128, 256)
+    original_data = D_.get_original_data(key, size=2000) # (2000, 512, 1024, 5)
     train_data = D_.get_train_data(D_.extract_uv_norm, original_data,
                                    name='full_norm', cache=True,
                                    cache_path=cache_path)
@@ -53,6 +45,21 @@ def task0(key, modelname, out):
     model = M_.get_model(modelname, sample=sample)
     train_iter, valid_iter, _ = M_.get_cfd_train_data(train_data, table=None,
                                                       batchsize=batchsize)
+
+    return model, train_data, train_iter, valid_iter
+
+
+################################################################################
+
+def task0(key, modelname, out):
+    ''' オートエンコーダ学習 '''
+
+    # 学習パラメータ定義
+    epoch = 200
+    batchsize = 25
+    out = f'{out}/res_{key}_{modelname}_{ut.snow}'
+
+    model, _, train_iter, valid_iter = get_task_data(key, modelname, batchsize)
 
     M_.train_model(model, train_iter, valid_iter, epoch=epoch, out=out)
 
@@ -67,6 +74,60 @@ def case0(*args, **kwargs):
 
     for key in keys:
         task0(key, name, out)
+
+
+################################################################################
+
+def task1(key, modelname, out):
+    ''' モデル読み出し+可視化 '''
+
+    model, train_data, train_iter, valid_iter = get_task_data(key, modelname)
+
+    # モデルのパスを取得
+    respath = ut.select_file(out, key=r'res_.*')
+    print('path:', respath)
+    file = ut.select_file(respath, key=r'snapshot_.*')
+    print('file:', file)
+
+    # npz保存名確認
+    # with np.load(file) as npzfile:
+    #     for f in npzfile:
+    #         print(f)
+    #     return
+
+    # モデル読み込み
+    chainer.serializers.load_npz(file, model,
+                                 path='updater/model:main/')
+
+    model.to_cpu()
+
+    # データセット
+    it_data = map(lambda a: model.xp.asarray(a[None, ...]), train_data)
+
+    # モデル適用
+    it_forward = map(lambda x: model.link(x, inference=True), it_data)
+
+    # 結果データ取得
+    it_result = map(lambda v: v.array[0], it_forward)
+
+    # 入力データと復号データを合成
+    it_zip = zip(train_data, it_result)
+
+    with chainer.using_config('train', False), chainer.no_backprop_mode():
+        # V_.show_chainer_2c(it_result)
+        V_.show_chainer_2r2c(it_zip)
+
+
+def case1(*args, **kwargs):
+    print(sys._getframe().f_code.co_name)
+
+    # keys = 'plate_10', 'wing_00', 'plate_20', 'wing_15', 'plate_30', 'wing_05'
+    keys = 'wing_10',
+    name = 'case1'
+    out = f'__result__/case0'
+
+    for key in keys:
+        task1(key, name, out)
 
 
 ################################################################################
@@ -114,6 +175,12 @@ def main():
     elif args.mode == '0':
         with ut.stopwatch('case0'):
             case0(args)
+
+    elif args.mode in '0123456789':
+        testf_ = globals().get('case' + args.mode)
+        if testf_:
+            with ut.stopwatch('case'+args.mode):
+                testf_(args)
 
     # if args.mode == '01':
     #     with ut.stopwatch('sample01'):
