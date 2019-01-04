@@ -29,7 +29,16 @@ DEBUG1 = True # maybe_init
 # ベースネットワーク
 ################################################################################
 
-class LAEChain(chainer.Chain):
+class AEBase(object):
+
+    def adjust(self):
+        if C_.DEVICE >= 0:
+            self.to_gpu(C_.DEVICE)
+        else:
+            self.to_cpu()
+
+
+class LAEChain(chainer.Chain, AEBase):
     ''' 単層エンコーダ+デコーダ(全結合ネットワーク)
     '''
 
@@ -37,6 +46,7 @@ class LAEChain(chainer.Chain):
         super().__init__()
         self.in_size = in_size
         self.out_size = out_size
+        self.n_latent = out_size
         self.in_shape = None
         self.init = False
         self.maybe_init(in_size)
@@ -52,12 +62,12 @@ class LAEChain(chainer.Chain):
             self.activation_e = activation
             self.activation_d = activation
 
-    def __call__(self, x):
-        h = self.encode(x)
-        y = self.decode(h)
+    def __call__(self, x, **kwargs):
+        h = self.encode(x, **kwargs)
+        y = self.decode(h, **kwargs)
         return y
 
-    def encode(self, x):
+    def encode(self, x, **kwargs):
         if DEBUG0:
             print(x.shape)
             print(self.in_size)
@@ -73,13 +83,19 @@ class LAEChain(chainer.Chain):
 
         if self.activation_e:
             y = self.activation_e(y)
+
+        if kwargs.get('show_shape'):
+            print(f'layer(E{self.name}): in: {x.shape} out: {y.shape}')
         return y
 
-    def decode(self, x):
+    def decode(self, x, **kwargs):
         y = self.dec(x)
         if self.activation_d:
             y = self.activation_d(y)
         y = y.reshape(-1, *self.in_shape)
+
+        if kwargs.get('show_shape'):
+            print(f'layer(D{self.name}): in: {x.shape} out: {y.shape}')
         return y
 
     def maybe_init(self, in_size_):
@@ -103,14 +119,8 @@ class LAEChain(chainer.Chain):
             self.init = True
             self.adjust()
 
-    def adjust(self):
-        if C_.DEVICE >= 0:
-            self.to_gpu(C_.DEVICE)
-        else:
-            self.to_cpu()
 
-
-class CAEChain(chainer.Chain):
+class CAEChain(chainer.Chain, AEBase):
     ''' 単層エンコーダ+デコーダ(畳み込みネットワーク)
     引数:
         in_channels
@@ -134,15 +144,16 @@ class CAEChain(chainer.Chain):
             self.activation_e = activation
             self.activation_d = activation
 
+        self.n_latent = None
         self.use_indices = use_indices
         self.adjust()
 
-    def __call__(self, x):
-        h = self.encode(x)
-        y = self.decode(h)
+    def __call__(self, x, **kwargs):
+        h = self.encode(x, **kwargs)
+        y = self.decode(h, **kwargs)
         return y
 
-    def encode(self, x):
+    def encode(self, x, **kwargs):
         h = self.enc(x)
         if self.activation_e:
             h = self.activation_e(h)
@@ -154,9 +165,17 @@ class CAEChain(chainer.Chain):
         # print('encode in:', x.shape)
         # print('encode enc:', h.shape)
         # print('encode out:', y.shape)
+        self.n_latent = y.shape
+        if kwargs.get('show_shape'):
+            print(f'layer(E{self.name}): in: {x.shape} out: {y.shape}')
         return y
 
-    def decode(self, x):
+    def decode(self, x, **kwargs):
+        if not x.shape[0] == self.indexes.shape[0]:
+            self.indexes = self.xp.repeat(self.indexes,
+                                          x.shape[0]//self.indexes.shape[0],
+                                          axis=0)
+
         if self.use_indices:
             h = F.upsampling_2d(x, self.indexes, ksize=2, outsize=self.insize)
         else:
@@ -167,42 +186,33 @@ class CAEChain(chainer.Chain):
         # print('decode in:', x.shape)
         # print('decode enc:', h.shape)
         # print('decode out:', y.shape)
+        if kwargs.get('show_shape'):
+            print(f'layer(D{self.name}): in: {x.shape} out: {y.shape}')
         return y
 
-    def adjust(self):
-        if C_.DEVICE >= 0:
-            self.to_gpu(C_.DEVICE)
-        else:
-            self.to_cpu()
 
-
-class CAEList(chainer.ChainList):
+class CAEList(chainer.ChainList, AEBase):
     ''' 単層エンコーダ+デコーダの直列リスト
     '''
 
     def __init__(self, *links):
         super().__init__(*links)
+        self.n_latent = self[-1].out_size
         self.adjust()
         self.count = 0
 
-    def __call__(self, x):
+    def __call__(self, x, **kwargs):
         if DEBUG0:
             self.count += 1
             print('call CAEList:', self.count, ' '*20) #, end='\r')
-        h = self.encode(x)
-        y = self.decode(h)
+        h = self.encode(x, **kwargs)
+        y = self.decode(h, **kwargs)
         return y
 
-    def encode(self, x):
-        y = reduce(lambda h, l: l.encode(h), self, x)
+    def encode(self, x, **kwargs):
+        y = reduce(lambda h, l: l.encode(h, **kwargs), self, x)
         return y
 
-    def decode(self, x):
-        y = reduce(lambda h, l: l.decode(h), reversed(self), x)
+    def decode(self, x, **kwargs):
+        y = reduce(lambda h, l: l.decode(h, **kwargs), reversed(self), x)
         return y
-
-    def adjust(self):
-        if C_.DEVICE >= 0:
-            self.to_gpu(C_.DEVICE)
-        else:
-            self.to_cpu()

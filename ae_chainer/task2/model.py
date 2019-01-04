@@ -20,6 +20,7 @@ import myutils as ut
 
 import common as C_
 import net as N_
+import net_vae as NV_
 
 
 DEBUG0 = False
@@ -115,45 +116,75 @@ def get_model_case0():
     ''' 畳み込みオートエンコーダ '''
 
     # 入出力チャンネル数を指定
-    model = N_.CAEList(N_.CAEChain(2, 10, activation=(F.relu, None)), # in: 512
-                       N_.CAEChain(10, 20), # in: 256
-                       N_.CAEChain(20, 40), # in: 128
-                       N_.CAEChain(40, 80), # in: 64
-                       N_.CAEChain(80, 40), # in: 32
-                       N_.CAEChain(40, 20), # in: 16
-                       N_.CAEChain(20, 10), # in: 8
-                       N_.LAEChain(None, 20), # in: 10*3*3
-                       N_.LAEChain(20, 10, activation=(None, F.relu)))
+    model = N_.CAEList(
+        N_.CAEChain(2, 10, activation=(F.relu, None)), # in: 512
+        N_.CAEChain(10, 20), # in: 256
+        N_.CAEChain(20, 20), # in: 128
+        N_.CAEChain(20, 20), # in: 64
+        N_.CAEChain(20, 20), # in: 32
+        N_.CAEChain(20, 20), # in: 16
+        N_.CAEChain(20, 20), # in: 8
+        N_.CAEChain(20, 20), # in: 3
+        N_.LAEChain(None, 20), # in: 10*3*3
+        N_.LAEChain(20, 10, activation=(None, F.relu)))
     return model
 
 
 def get_model_case1():
-    ''' 畳み込みオートエンコーダ '''
+    ''' VAE '''
 
     # 入出力チャンネル数を指定
-    model = N_.CAEList(N_.CAEChain(2, 10, activation=(F.relu, None)), # in: 512
-                       N_.CAEChain(10, 20), # in: 256
-                       N_.CAEChain(20, 40), # in: 128
-                       N_.CAEChain(40, 80), # in: 64
-                       N_.CAEChain(80, 40), # in: 32
-                       N_.CAEChain(40, 20), # in: 16
-                       N_.CAEChain(20, 10), # in: 8
-                       N_.LAEChain(None, 20), # in: 10*3*3
-                       N_.LAEChain(20, 10, activation=(None, F.relu)))
-    return model
+    model = N_.CAEList(
+        N_.CAEChain(2, 10, activation=(F.relu, None)), # in: 512, 1024
+        N_.CAEChain(10, 20), # in: 256
+        N_.CAEChain(20, 20), # in: 128
+        N_.CAEChain(20, 20), # in: 64
+        N_.CAEChain(20, 20), # in: 32
+        N_.CAEChain(20, 20), # in: 16
+        N_.CAEChain(20, 20), # in: 8
+        N_.CAEChain(20, 20), # in: 4
+        N_.LAEChain(None, 20), # in: 10*3*3
+        NV_.VAEChain(20, 10)) # in: 10*3*3
+
+    loss = NV_.VAELoss(model, 10)
+    return loss
+
+
+def get_model_case2():
+    ''' VAE '''
+
+    # 入出力チャンネル数を指定
+    model = N_.CAEList(
+        N_.CAEChain(2, 10, activation=(F.relu, None)), # in: 512, 1024
+        N_.CAEChain(10, 20), # in: 256
+        N_.CAEChain(20, 20), # in: 128
+        N_.CAEChain(20, 20), # in: 64
+        N_.CAEChain(20, 20), # in: 32
+        N_.CAEChain(20, 20), # in: 16
+        N_.CAEChain(20, 20), # in: 8
+        N_.CAEChain(20, 20), # in: 4
+        N_.LAEChain(None, 10), # in: 10*3*3
+        NV_.VAEChain(10, 2)) # in: 10*3*3
+
+    loss = NV_.VAELoss(model, 10)
+    return loss
 
 
 def get_model(name, sample=None):
     if name == 'case0':
         model = get_model_case0()
+    elif name == 'case1':
+        model = get_model_case1()
+    elif name == 'case2':
+        model = get_model_case2()
     else:
         raise NameError
 
     if sample is not None:
         # モデル初期化
-        with chainer.using_config('train', False), \
-             chainer.using_config('enable_backprop', False):
-            model(model.xp.asarray(sample))
+        print('init model')
+        with chainer.using_config('train', False), chainer.no_backprop_mode():
+            model(model.xp.asarray(sample), show_shape=True)
     return model
 
 
@@ -163,9 +194,8 @@ def get_model(name, sample=None):
 
 def train_model(model, train_iter, valid_iter, epoch=10, out=f'result',
                 fix_trained=False):
-    # ネットワークをClassifierで包んで、ロスの計算などをモデルに含める
-    # L.Classifierはpredictorというattributeに持ち、ロス計算を行う機能を追加する
-    learner = L.Classifier(model, lossfun=F.mean_squared_error)
+    # learner = L.Classifier(model, lossfun=F.mean_squared_error)
+    learner = model
     learner.compute_accuracy = False
 
     # 最適化手法の選択

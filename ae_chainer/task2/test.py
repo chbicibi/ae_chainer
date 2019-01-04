@@ -36,6 +36,7 @@ def test0(args):
     loc = np.zeros(n_latent, np.float32)
     scale = np.ones(n_latent, np.float32)
     normal = D.Normal(loc, scale=scale)
+    samples = np.arange(0, 1, 0.1, dtype=np.float32)
 
     # prior = NV_.Prior(3)
     # normal = prior()
@@ -43,6 +44,9 @@ def test0(args):
     print(normal.sample(1))
     print(normal.sample((1,1)))
     print(normal.sample_n(1))
+    print(normal.prob(samples))
+    print(normal.log_prob(samples))
+    print(normal.mean)
 
 
 def test1(args):
@@ -56,15 +60,80 @@ def test1(args):
     scale = np.ones(n_latent, np.float32)
     normal = D.Normal(loc, scale=scale)
 
-    brnoulli = D.Bernoulli(logit=normal.sample(1))
+    p = np.arange(0.1, 1, 0.1, dtype=np.float32)
+    logit = np.log(p/(1-p))
+    samples = np.ones(9, dtype=np.float32) * 0.5
 
-    # print(brnoulli.sample())
+    brnoulli = D.Bernoulli(logit=logit)
+    print(brnoulli.sample(10))
+    print(brnoulli.prob(samples))
+    print(brnoulli.prob(samples*2))
+    # print(brnoulli.log_prob(samples))
+    print(brnoulli.mean)
+
     # print(brnoulli.sample(1))
     # print(brnoulli.sample((1,1)))
     # print(brnoulli.sample_n(1))
 
-    brnoulli = D.Bernoulli(p=np.arange(0, 1, 0.1))
+    brnoulli = D.Bernoulli(p=p, binary_check=True)
     print(brnoulli.sample(10))
+    print(brnoulli.prob(samples))
+    print(brnoulli.prob(samples*2))
+    # print(brnoulli.log_prob(samples))
+    print(brnoulli.mean)
+
+
+def test2(args):
+    ''' 学習データ範囲を表示 '''
+
+    # keys = 'plate_00', 'plate_10', 'plate_20', 'plate_30', 'wing_00', \
+    #        'wing_05', 'wing_10', 'wing_15'
+    keys = 'wing_15',
+    for key in keys:
+        print(key)
+        original_data = D_.get_original_data(key, size=2000) # (128, 256)
+        for i in range(17, 20):
+            a = original_data[100*i:100*(i+1), :, :, 0:2]
+            print(f'[{i:2d}] min: {a.min():.3f} max: {a.max():.3f}')
+
+
+def test3(args):
+    ''' データ作成のテスト '''
+
+    print(sys._getframe().f_code.co_name)
+
+    ''' 学習パラメータ定義 '''
+    epoch = 200
+    batchsize = 50
+    out = f'__result__/res_{ut.snow}'
+
+    ''' 学習データ作成 '''
+    key = 'wing_00'
+    cache_path = f'__cache__/{key}'
+    original_data = D_.get_original_data(key, size=2000) # (128, 256)
+    train_data = D_.get_train_data(D_.extract_uv_norm, original_data,
+                                   name='full_norm', cache=True,
+                                   cache_path=cache_path)
+
+    if False:
+        a = np.array(train_data[1000:1500], dtype=np.float32)
+        print(a.shape)
+        print(np.min(a), np.max(a))
+        return
+    elif False:
+        V_.show_v(train_data)
+        return
+
+    ''' 学習モデル作成 '''
+    sample = train_data[:1]
+    model = M_.get_model('case1', sample=sample)
+    # train_iter, valid_iter, _ = M_.get_cfd_train_data(train_data, table=None,
+    #                                                   batchsize=batchsize)
+
+    # if args.clear:
+    #     shutil.rmtree(out, ignore_errors=True)
+
+    # M_.train_model(model, train_iter, valid_iter, epoch=epoch, out=out)
 
 
 # def test1(args):
@@ -110,7 +179,7 @@ def test1(args):
 #     ''' モデル読み出しのテスト '''
 
 #     # モデルのパスを取得
-#     out = ut.select_file('result', key=r'res_.*')
+#     out = ut.select_file('__result__', key=r'res_.*')
 #     print('out:', out)
 #     file = ut.select_file(out, key=r'snapshot_.*')
 #     print('file:', file)
@@ -148,18 +217,50 @@ def test1(args):
 
 ################################################################################
 
+class Cls(object):
+    def __getitem__(self, key):
+        return key
+
+
 def __test__():
-    pass
+    a = np.array([[[1, 1.1], [2, 2.2], [3, 3.3]], [[4, 4.4], [5, 5.5], [6, 6.6]]])
+    print(np.sum(a, axis=-1))
+    # print(a.reshape((-1, *a.shape[2:])).shape)
+    # print(np.broadcast_to(a, (2, 2, 3, 2)))
+
+def __test__():
+    a = np.array([[1], [2]])
+    b = np.repeat(a, 2, axis=0)
+    print(a)
+    print(a.shape)
+    print(b)
+    print(b.shape)
+
+
+def __test__():
+    a = D.Normal(loc=np.array([0, 0, 0], dtype=np.float32),
+                 scale=np.array([1, 1, 1], dtype=np.float32))
+    print(a.mean)
+    print(a.sample())
+    print(a.batch_shape)
+
+
+def __test__():
+    d0 = D.Normal(loc=np.array([0, 0, 0], dtype=np.float32),
+                  scale=np.array([1, 1, 1], dtype=np.float32))
+    d1 = D.Normal(loc=np.array([0, 0, 1], dtype=np.float32),
+                  scale=np.array([1, 1.5, 1], dtype=np.float32))
+    print(chainer.kl_divergence(d0, d1))
 
 
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('case', nargs='?', default='',
-                        choices=['', '0', '1', '2'],
+                        choices=['', '0', '1', '2', '3'],
                         help='Number of main procedure')
     parser.add_argument('--gpu', '-g', type=int, default=0,
                         help='GPU ID (negative value indicates CPU)')
-    parser.add_argument('--out', '-o', default='result',
+    parser.add_argument('--out', '-o', default='__result__',
                         help='Directory to output the result')
     parser.add_argument('--clear', '-c', action='store_true',
                         help='Remove directory at the beginning')
@@ -178,17 +279,11 @@ def main():
         __test__()
         return
 
-    if args.case == '0':
-        with ut.stopwatch('case'+args.case):
-            test0(args)
-
-    elif args.case == '1':
-        with ut.stopwatch('case'+args.case):
-            test1(args)
-
-    elif args.case == '2':
-        with ut.stopwatch('case'+args.case):
-            test2(args)
+    if args.case in '0123456789':
+        testf_ = globals().get('test' + args.case)
+        if testf_:
+            with ut.stopwatch('case'+args.case):
+                testf_(args)
 
     elif args.case == '01':
         with ut.stopwatch('case'+args.case):

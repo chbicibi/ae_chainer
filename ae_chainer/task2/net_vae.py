@@ -8,6 +8,150 @@ from chainer import reporter
 
 import net as N_
 
+
+class VAELoss(chainer.Chain, N_.AEBase):
+
+    def __init__(self, link, beta=1.0, k=1):
+        super().__init__()
+        self.beta = beta
+        self.k = k
+        n_latent = link.n_latent
+
+        with self.init_scope():
+            self.link = link
+            self.prior = Prior(n_latent)
+
+        self.n_latent = n_latent
+        self.predictor = link
+        self.adjust()
+
+    def __call__(self, x, x_=None, **kwargs):
+        q_z = self.encode(x, **kwargs)
+
+        z = self.sample(q_z)
+
+        # print('z shape:', z.shape)
+
+        p_x = self.decode(z, **kwargs)
+
+        p_z = self.prior()
+
+        if x_ is None:
+            x_ext = F.repeat(x, self.k, axis=0)
+        else:
+            x_ext = F.repeat(x_, self.k, axis=0)
+
+        # print('p_x shape:', p_x.batch_shape)
+        # print('x_ext shape:', x_ext.shape)
+
+        reconstr = self.mean(p_x.log_prob(x_ext))
+
+        # reconstr = F.mean(F.sum(p_x.log_prob(
+        #     F.broadcast_to(x[None, ...], (self.k, *x.shape))), axis=-1))
+
+        kl_penalty = self.mean(chainer.kl_divergence(q_z, p_z))
+
+        loss = - (reconstr - self.beta * kl_penalty)
+        reporter.report({'loss': loss}, self)
+        reporter.report({'reconstr': reconstr}, self)
+        reporter.report({'kl_penalty': kl_penalty}, self)
+        return loss
+
+    def encode(self, x, **kwargs):
+        q_z = self.link.encode(x, **kwargs)
+        return q_z
+
+    def decode(self, x, **kwargs):
+        y = self.link.decode(x, **kwargs)
+        p_x = D.Bernoulli(logit=y)
+        return p_x
+
+    def sample(self, q_z):
+        z = q_z.sample(self.k)
+        return z.reshape((-1, *z.shape[2:]))
+
+    def mean(self, v):
+        return F.mean(F.sum(v, axis=tuple(range(1, v.ndim))))
+
+
+################################################################################
+
+class VAEChain(chainer.Chain, N_.AEBase):
+    ''' 単層エンコーダ+デコーダ(VAE全結合ネットワーク)
+    '''
+
+    def __init__(self, in_size, out_size, activation=F.relu):
+        super().__init__()
+        self.in_size = in_size
+        self.out_size = out_size
+        self.in_shape = None
+        self.init = False
+        self.maybe_init(in_size)
+        # with self.init_scope():
+        #     self.enc = L.Linear(in_size, out_size)
+        #     self.dec = L.Linear(out_size, in_size)
+        # self.in_size = in_size
+
+        if type(activation) is tuple:
+            self.activation_e = None
+            self.activation_d = activation[0]
+        else:
+            self.activation_e = None
+            self.activation_d = activation
+
+    def __call__(self, x, **kwargs):
+        h = self.encode(x, **kwargs)
+        y = self.decode(h, **kwargs)
+        return y
+
+    def encode(self, x, **kwargs):
+        self.in_shape = x.shape[1:]
+        self.maybe_init(self.in_shape)
+
+        x_ = x.reshape(-1, self.in_size)
+        try:
+            mu = self.mu(x_)
+            ln_sigma = self.ln_sigma(x_)  # log(sigma)
+            y = D.Normal(loc=mu, log_scale=ln_sigma)
+        except:
+            print(x_.shape)
+            raise
+
+        if kwargs.get('show_shape'):
+            print(f'layer(E{self.name}): in: {x.shape} out: {y.batch_shape}')
+        return y
+
+    def decode(self, x, **kwargs):
+        y = self.dec(x)
+        if self.activation_d:
+            y = self.activation_d(y)
+        y = y.reshape(-1, *self.in_shape)
+
+        if kwargs.get('show_shape'):
+            print(f'layer(D{self.name}): in: {x.shape} out: {y.shape}')
+        return y
+
+    def maybe_init(self, in_size_):
+        if self.init:
+            return
+        elif in_size_:
+            if type(in_size_) is tuple:
+                in_size = np.prod(in_size_)
+            else:
+                in_size = in_size_
+
+            with self.init_scope():
+                self.mu = L.Linear(in_size, self.out_size)
+                self.ln_sigma = L.Linear(in_size, self.out_size)
+                self.dec = L.Linear(self.out_size, in_size)
+
+            self.in_size = in_size
+            self.init = True
+            self.adjust()
+
+
+################################################################################
+
 class AvgELBOLoss(chainer.Chain):
     """Loss function of VAE.
 

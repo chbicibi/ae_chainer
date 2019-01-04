@@ -18,8 +18,46 @@ DEBUG0 = False
 # 学習イテレータ
 ################################################################################
 
-class CFDBase(object):
-    ''' 生のCFDデータを返すイテラブルオブジェクト '''
+class ContainerBase(object):
+
+    def __init__(self, it):
+        self.it = it
+        self.data = None
+        self.len = len(it)
+
+    def __len__(self):
+        return self.len
+
+    def __getitem__(self, key):
+        if type(key) is tuple:
+            head, *tail = key
+            if type(head) is slice:
+                tail = (slice(None), *tail)
+            return np.array(self[head])[tail]
+
+        elif type(key) is slice:
+            return [self[i] for i in range(*key.indices(self.len))]
+
+        else:
+            if key >= self.len:
+                raise IndexError
+            if not self.data:
+                return self.get_data(key)
+            if self.data[key] is None:
+                self.data[key] = self.get_data(key)
+            return self.data[key]
+
+        # else:
+        #     raise TypeError
+
+    def get_data(self, key):
+        return self.it[key]
+
+
+class CFDBase(ContainerBase):
+    ''' 生のCFDデータを返すイテラブルオブジェクト
+    shape == (u, v, p, f, w)
+    '''
 
     def __init__(self, datapath, grid_path=None, size=None, cache=False):
         files = get_filenames(datapath)
@@ -39,26 +77,6 @@ class CFDBase(object):
         self.grid_path = grid_path
         self.grid = None
 
-    def __len__(self):
-        return self.len
-
-    def __getitem__(self, key):
-        if type(key) is slice:
-            return [self[i] for i in range(*key.indices(self.len))]
-
-        else:
-            if key >= self.len:
-                raise IndexError
-            if not self.data:
-                return self.get_data(key)
-            if self.data[key] is None:
-                self.data[key] = self.get_data(key)
-            return self.data[key] # (u, v, p, f, w)
-
-        # else:
-        #     print(type(key))
-        #     raise TypeError
-
     def get_grid(self, dtype=np.float32):
         if not self.grid:
             self.grid = np.loadtxt(self.grid_path, delimiter=',', dtype=dtype)
@@ -70,7 +88,7 @@ class CFDBase(object):
         return np.load(self.files[key])
 
 
-class MemoizeMapList(object):
+class MemoizeMapList(ContainerBase):
     ''' 入力イテラブルを加工するイテラブルオブジェクト '''
 
     def __init__(self, fn, it, name='', cache=False, cache_path=None):
@@ -90,26 +108,6 @@ class MemoizeMapList(object):
             self.cache_path = abspath
         else:
             self.cache_path = None
-
-    def __len__(self):
-        return self.len
-
-    def __getitem__(self, key):
-        if type(key) is slice:
-            return [self[i] for i in range(*key.indices(self.len))]
-
-        else: # int or np.int32
-            if not self.data:
-                return self.get_data(key)
-
-            if self.data[key] is None:
-                self.data[key] = self.get_data(key)
-
-            return self.data[key]
-
-        # else:
-        #     print(type(key))
-        #     raise TypeError
 
     def get_data(self, key):
         if self.cache_path:
@@ -193,7 +191,7 @@ def extract_uv_norm(frame):
     vmax = 1.7
     a = frame[:, :, :2]
     a = (a - vmin) / (vmax - vmin)
-    return a
+    return a.transpose(2, 0, 1) # => (H, W, C) -> (C, H, W)
 
 
 def extract_uv_sq_norm(frame):

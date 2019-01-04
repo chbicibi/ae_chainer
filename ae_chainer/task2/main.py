@@ -32,25 +32,25 @@ SRC_FILENAME = os.path.splitext(SRC_FILE)[0]
 
 ################################################################################
 
-def task0(key, out):
+def task0(key, modelname, out):
     ''' オートエンコーダ学習 '''
 
     # 学習パラメータ定義
     epoch = 200
-    batchsize = 50
-    out = f'{out}/res_{ut.snow}'
+    batchsize = 25
+    out = f'{out}/res_{key}_{modelname}_{ut.snow}'
 
     # 学習データ作成
     # key = 'plate_00'
     cache_path = f'__cache__/{key}'
     original_data = D_.get_original_data(key, size=2000) # (128, 256)
-    train_data = D_.get_train_data(D_.extract_uv_sq_norm, original_data,
-                                   name='sq_norm', cache=True,
+    train_data = D_.get_train_data(D_.extract_uv_norm, original_data,
+                                   name='full_norm', cache=True,
                                    cache_path=cache_path)
 
     # 学習モデル作成
-    sample = C_.xp.array(train_data[:1])
-    model = M_.get_model('case0', sample=sample)
+    sample = train_data[:1]
+    model = M_.get_model(modelname, sample=sample)
     train_iter, valid_iter, _ = M_.get_cfd_train_data(train_data, table=None,
                                                       batchsize=batchsize)
 
@@ -60,108 +60,13 @@ def task0(key, out):
 def case0(*args, **kwargs):
     print(sys._getframe().f_code.co_name)
 
-    keys = 'plate_10', 'wing_00', 'plate_20', 'wing_15', 'plate_30', 'wing_05'
-    out = f'result/case0'
+    # keys = 'plate_10', 'wing_00', 'plate_20', 'wing_15', 'plate_30', 'wing_05'
+    keys = 'plate_20',
+    name = 'case2'
+    out = f'__result__/case0'
 
     for key in keys:
-        task0(key, out)
-
-
-################################################################################
-
-def sample0(out=f'result', clear=False):
-    ''' 一括学習 '''
-    epoch = 100
-
-    model = get_model()
-    train_iter, valid_iter, test_iter = get_train_data()
-
-    if clear:
-        shutil.rmtree(out, ignore_errors=True)
-
-    train_model(model, train_iter, valid_iter,
-                epoch=epoch,
-                out=f'{out}/all',
-                fix_trained=False)
-
-
-def sample01(out=f'result', clear=False):
-    ''' 逐次学習 '''
-    train_iter, valid_iter, test_iter = get_train_data()
-    model_list = get_model()
-    model = CAEList()
-
-    if clear:
-        shutil.rmtree(out, ignore_errors=True)
-
-    for i, m in enumerate(model_list):
-        print('STEP:', i + 1)
-        model.append(m)
-        file = f'{out}/step{i+1}/snapshot_epoch-50.model'
-        if os.path.isfile(file):
-            print('Loading model')
-            path = f'updater/model:main/predictor/{i}/'
-            chainer.serializers.load_npz(file, m, path)
-        else:
-            train_model(model, train_iter, valid_iter,
-                        epoch=50,
-                        out=f'{out}/step{i+1}',
-                        fix_trained=False)
-
-        if i < len(model_list) - 1:
-            train_iter.reset()
-            valid_iter.reset()
-
-
-def sample1(model_path=f'result/step5/snapshot_epoch-30.model'):
-    # データセットの準備
-    model = get_model()
-    train_iter, valid_iter, test_iter = get_train_data()
-
-    # モデル読み込み
-    chainer.serializers.load_npz(model_path, model,
-                                 path='updater/model:main/predictor/')
-
-    test_batch = next(test_iter)
-
-    fig, axes = plt.subplots(10, 2)
-
-    for i in range(10):
-        x, t = test_batch[i]
-
-        # ネットワークと同じデバイス上にデータを送る
-        x = model.xp.asarray(x[None, ...])
-
-        with chainer.using_config('train', False), \
-             chainer.using_config('enable_backprop', False):
-            y = model(x)
-
-        if DEVICE >= 0:
-            # 結果をCPUに送る
-            x_array = chainer.cuda.to_cpu(x)
-            y_array = chainer.cuda.to_cpu(y.array)
-        else:
-            x_array = x
-            y_array = y.array
-
-        axes[i][0].imshow(x_array[0].transpose(1, 2, 0), vmin=0, vmax=1)
-        axes[i][1].imshow(y_array[0].transpose(1, 2, 0), vmin=0, vmax=1)
-    plt.show()
-
-
-def predict(model, image_id):
-    ''' 学習済みモデルで推論する '''
-    _, test = cifar.get_cifar10()
-    x, t = test[image_id]
-    model.to_cpu()
-    with chainer.using_config('train', False), \
-         chainer.using_config('enable_backprop', False):
-        y = model.predictor(x[None, ...]).data.argmax(axis=1)[0]
-    print('predicted_label:', cls_names[y])
-    print('answer:', cls_names[t])
-
-    plt.imshow(x.transpose(1, 2, 0))
-    plt.show()
+        task0(key, name, out)
 
 
 ################################################################################
