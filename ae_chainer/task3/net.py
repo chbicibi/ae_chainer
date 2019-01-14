@@ -82,6 +82,7 @@ class LAEChain(chainer.Chain, AEBase):
             raise
 
         if self.activation_e:
+            y = self.bne(y)
             y = self.activation_e(y)
 
         if kwargs.get('show_shape'):
@@ -91,6 +92,7 @@ class LAEChain(chainer.Chain, AEBase):
     def decode(self, x, **kwargs):
         y = self.dec(x)
         if self.activation_d:
+            y = self.bnd(y)
             y = self.activation_d(y)
         y = y.reshape(-1, *self.in_shape)
 
@@ -114,6 +116,8 @@ class LAEChain(chainer.Chain, AEBase):
             with self.init_scope():
                 self.enc = L.Linear(in_size, self.out_size)
                 self.dec = L.Linear(self.out_size, in_size)
+                self.bne = L.BatchNormalization(size=self.out_size, axis=0)
+                self.bnd = L.BatchNormalization(size=in_size, axis=0)
 
             self.in_size = in_size
             self.init = True
@@ -136,6 +140,8 @@ class CAEChain(chainer.Chain, AEBase):
                                        stride=1, pad=0)
             self.dec = L.Deconvolution2D(out_channels, in_channels, ksize=3,
                                          stride=1, pad=0)
+            self.bne = L.BatchNormalization(size=out_channels, axis=(0, 2, 3))
+            self.bnd = L.BatchNormalization(size=in_channels, axis=(0, 2, 3))
 
         if type(activation) is tuple:
             self.activation_e = activation[0]
@@ -156,6 +162,7 @@ class CAEChain(chainer.Chain, AEBase):
     def encode(self, x, **kwargs):
         h = self.enc(x)
         if self.activation_e:
+            h = self.bne(h)
             h = self.activation_e(h)
         self.insize = h.shape[2:]
         if self.use_indices:
@@ -182,6 +189,7 @@ class CAEChain(chainer.Chain, AEBase):
             h = F.unpooling_2d(x, ksize=2, outsize=self.insize)
         y = self.dec(h)
         if self.activation_d:
+            y = self.bnd(y)
             y = self.activation_d(y)
         # print('decode in:', x.shape)
         # print('decode enc:', h.shape)

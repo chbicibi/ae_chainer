@@ -222,7 +222,7 @@ def train_model(model, train_iter, valid_iter, epoch=10, out='__result__',
     learner.compute_accuracy = False
 
     # 最適化手法の選択
-    optimizer = Adam().setup(learner)
+    optimizer = Adam(alpha=0.01).setup(learner)
 
     if fix_trained:
         for m in model[:-1]:

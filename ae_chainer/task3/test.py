@@ -137,6 +137,14 @@ def test3(args):
     # M_.train_model(model, train_iter, valid_iter, epoch=epoch, out=out)
 
 
+def test4(args):
+    # BatchNormalizationのテスト
+    bn = L.BatchNormalization(axis=0)
+    a = np.array([[1, 3, 4, 2, 6], [10, 7, 13, 14, 15]], dtype=np.float32)
+    b = np.arange(15, dtype=np.float32).reshape((3, 5))
+    print(bn(a))
+    print(bn(b))
+
 # def test1(args):
 #     ''' データ作成のテスト '''
 
@@ -267,7 +275,7 @@ def __test__():
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('case', nargs='?', default='',
-                        choices=['', '0', '1', '2', '3'],
+                        choices=['', '0', '1', '2', '3', '4'],
                         help='Number of main procedure')
     parser.add_argument('--gpu', '-g', type=int, default=0,
                         help='GPU ID (negative value indicates CPU)')

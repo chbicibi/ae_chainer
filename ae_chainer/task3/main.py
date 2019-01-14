@@ -73,7 +73,7 @@ def process0(key, modelname, out):
 
     # 学習パラメータ定義
     epoch = 500
-    batchsize = 25
+    batchsize = 20
     logdir = f'{out}/res_{key}_{modelname}_{ut.snow}'
 
     model, _, train_iter, valid_iter = get_task_data(key, modelname, batchsize)
@@ -118,6 +118,9 @@ def task0(*args, **kwargs):
     except Exception as e:
         error = e
         tb = traceback.format_exc()
+
+    if 'sw' in kwargs and int(kwargs['sw']) < 3600:
+        return
 
     with ut.EmailIO(None, 'ae_chainer: Task is Complete') as e:
         print(sys._getframe().f_code.co_name, file=e)
