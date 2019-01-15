@@ -85,8 +85,8 @@ def process0_resume(key, modelname, out):
     ''' オートエンコーダ学習 '''
 
     # 学習パラメータ定義
-    epoch = 1000
-    batchsize = 25
+    epoch = 500
+    batchsize = 10
     logdir = f'{out}/res_{key}_{modelname}_{ut.snow}'
 
     model, _, train_iter, valid_iter = get_task_data(key, modelname, batchsize)
@@ -104,7 +104,7 @@ def task0(*args, **kwargs):
 
     # keys = 'plate_10', 'wing_00', 'plate_20', 'wing_15', 'plate_30', 'wing_05'
     keys = 'wing_30',
-    name = 'case2'
+    name = 'case1'
     out = f'__result__/{name}'
     error = None
 

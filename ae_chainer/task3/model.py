@@ -28,47 +28,6 @@ DEBUG0 = False
 
 
 ################################################################################
-# データセット (ダミー)
-################################################################################
-
-class DummyDataset(chainer.dataset.DatasetMixin):
-    def __init__(self):
-        pass
-
-    def __len__(self):
-        return 2000
-
-    def get_example(self, i):
-        a = np.zeros((3, 320, 320), dtype=np.float32)
-        return a, a
-
-
-def get_dummy_train_data():
-    # データセットの準備
-    # train_val, test = cifar.get_cifar10() # => (50000, 2), (10000, 2)
-
-    # データセットの修正 (教師データを学習データで置き換え)
-    # testは使わない
-    # train_val_data = np.zeros((1000, 3, 320, 320), dtype=np.float32)
-    # train_val = TupleDataset(train_val_data, train_val_data)
-    train_val = DummyDataset()
-
-    # Validation用データセットを作る
-    train_size = int(len(train_val) * 0.9)
-    train, valid = split_dataset_random(train_val, train_size, seed=0)
-
-    # Iteratorの作成
-    # SerialIteratorはデータセットの中のデータを順番に取り出してくる
-    batchsize = 64
-    train_iter = SerialIterator(train, batchsize)
-    valid_iter = SerialIterator(valid, batchsize, repeat=False, shuffle=False)
-    # test_iter = SerialIterator(test, batchsize, repeat=False, shuffle=False)
-    test_iter = None
-
-    return train_iter, valid_iter, test_iter
-
-
-################################################################################
 # データセット (CFD)
 ################################################################################
 
