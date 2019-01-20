@@ -192,6 +192,28 @@ def get_model_case3():
     return loss
 
 
+def get_model_case4_0():
+    ''' VAE
+    1 4 10 22 46 94 190 382
+    2 6 14 30 62 126 254 510
+    3 8 18 38 78 158 318
+    '''
+
+    # 入出力チャンネル数を指定
+    model = N_.CAEList(
+        N_.CAEChain(2, 10, activation=(F.relu, None)), # in: 384, 384
+        N_.CAEChain(10, 20), # in: 256
+        N_.CAEChain(20, 30), # in: 128
+        N_.CAEChain(30, 30), # in: 64
+        N_.CAEChain(30, 30), # in: 32
+        N_.CAEChain(30, 30), # in: 16
+        N_.CAEChain(30, 20), # in: 8
+        NV_.VAEChain(None, 10)) # in: 10*3*3
+
+    loss = NV_.VAELoss(model, beta=1.0, k=1)
+    return loss
+
+
 def get_model(name, sample=None):
     if name == 'case0':
         model = get_model_case0()
@@ -205,6 +227,8 @@ def get_model(name, sample=None):
         model = get_model_case2()
     elif name == 'case3':
         model = get_model_case3()
+    elif name == 'case4_0':
+        model = get_model_case4_0()
     else:
         raise NameError
 
@@ -227,7 +251,7 @@ def train_model(model, train_iter, valid_iter, epoch=10, out='__result__',
     learner.compute_accuracy = False
 
     # 最適化手法の選択
-    optimizer = Adam(alpha=0.01).setup(learner)
+    optimizer = Adam(alpha=0.005).setup(learner)
 
     if fix_trained:
         for m in model[:-1]:
