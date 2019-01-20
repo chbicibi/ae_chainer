@@ -13,7 +13,7 @@ import chainer
 # import chainer.links as L
 # from chainer.datasets import mnist, cifar, split_dataset_random
 # from chainer.datasets.tuple_dataset import TupleDataset
-# from chainer.iterators import SerialIterator
+from chainer.iterators import SerialIterator
 # from chainer.optimizers import Adam
 # from chainer.training import StandardUpdater, Trainer, extensions
 
@@ -49,21 +49,55 @@ def get_extract(key):
     return D_.extract_uv_norm(vmin, vmax)
 
 
-def get_task_data(key, modelname, batchsize=1):
+def get_task_data(_, modelname, batchsize=1):
+    ''' 学習データ作成
+    key == 'wing'
+    '''
+    def f_(s):
+        def g_(key):
+            print('create data:', key)
+            cache_path = f'__cache__/{key}'
+            original_data = D_.get_original_data(key, size=2000) # (2000, 512, 1024, 5)
+            train_data = D_.get_train_data(get_extract(key), original_data,
+                                           name='full_norm', cache=True,
+                                           cache_path=cache_path)
+            a = train_data[2000-s:2000]
+            return a
+        return g_
+
     # 学習データ作成
-    cache_path = f'__cache__/{key}'
-    original_data = D_.get_original_data(key, size=2000) # (2000, 512, 1024, 5)
-    train_data = D_.get_train_data(get_extract(key), original_data,
-                                   name='full_norm', cache=True,
-                                   cache_path=cache_path)
+    keys = 'wing_00', 'wing_10', 'wing_20', 'wing_30'
+    train = D_.MapChain(crop_random_sq, *map(f_(300), keys), name='random_crop')
+    train_iter = SerialIterator(train, batchsize)
+
+    # 検証データ作成
+    keys = 'wing_05', 'wing_15'
+    valid = D_.MapChain(crop_random_sq, *map(f_(100), keys), name='random_crop')
+    valid_iter = SerialIterator(valid, batchsize, repeat=False, shuffle=False)
 
     # 学習モデル作成
-    sample = train_data[:1]
+    sample = train[:1]
     model = M_.get_model(modelname, sample=sample)
-    train_iter, valid_iter, _ = M_.get_cfd_train_data(train_data, table=None,
-                                                      batchsize=batchsize)
 
-    return model, train_data, train_iter, valid_iter
+    return model, train, train_iter, valid_iter
+
+
+################################################################################
+# データを加工(学習)
+################################################################################
+
+def crop_random_sq(frame):
+    ''' frame: (C, H, W)
+    (2, 512, 1024) => (2, 384, 384)
+    random_range = 0:128, 0:640
+    '''
+    size = 382
+    p = [np.random.randint(r - size) for r in frame.shape[1:]]
+    if np.random.rand() < 0.5:
+        return frame[:, p[0]:p[0]+size, p[1]:p[1]+size]
+    else:
+        e = p[0] - 1 if p[0] else None
+        return frame[:, p[0]+size-1:e:-1, p[1]:p[1]+size]
 
 
 ################################################################################
@@ -72,8 +106,8 @@ def process0(key, modelname, out):
     ''' オートエンコーダ学習 '''
 
     # 学習パラメータ定義
-    epoch = 200
-    batchsize = 20
+    epoch = 1000
+    batchsize = 50
     logdir = f'{out}/res_{key}_{modelname}_{ut.snow}'
 
     model, _, train_iter, valid_iter = get_task_data(key, modelname, batchsize)
@@ -85,8 +119,8 @@ def process0_resume(key, modelname, out):
     ''' オートエンコーダ学習 '''
 
     # 学習パラメータ定義
-    epoch = 200
-    batchsize = 10
+    epoch = 1000
+    batchsize = 50
     logdir = f'{out}/res_{key}_{modelname}_{ut.snow}'
 
     model, _, train_iter, valid_iter = get_task_data(key, modelname, batchsize)
@@ -104,13 +138,13 @@ def task0(*args, **kwargs):
 
     # keys = 'plate_10', 'wing_00', 'plate_20', 'wing_15', 'plate_30', 'wing_05'
     # keys = 'wing_30',
-    keys = 'plate_30', 'plate_20', 'plate_10', 'plate_00', 'wing_30', 'wing_20', 'wing_10', 'wing_00'
-    name = 'case2n'
+    # keys = 'plate_30', 'plate_20', 'plate_10', 'plate_00', 'wing_30', 'wing_20', 'wing_10', 'wing_00'
+    name = 'case4_0'
     out = f'__result__/{name}'
     error = None
 
     try:
-        for key in keys:
+        for key in [0]:
             if kwargs.get('resume'):
                 process0_resume(key, name, out)
             else:
@@ -189,8 +223,8 @@ def task1(*args, **kwargs):
     print(sys._getframe().f_code.co_name)
 
     # keys = 'plate_10', 'wing_00', 'plate_20', 'wing_15', 'plate_30', 'wing_05'
-    keys = 'plate_30',
-    name = 'case11'
+    keys = 'wing_00',
+    name = 'case4_0'
     out = f'__result__/{name}'
 
     if kwargs.get('check_snapshot'):
@@ -204,8 +238,13 @@ def task1(*args, **kwargs):
 ################################################################################
 
 def __test__():
-    with ut.EmailIO(None, 'ae_chainer: Task is Complete') as e:
-        print('Test', file=e)
+    key = 'wing_00'
+    modelname = 'case2n'
+    get_task_data_merge(key, modelname, batchsize=1)
+
+
+def __test__():
+    crop_random_sq(np.ones((2, 512, 1024), dtype=np.float32))
 
 
 def get_args():
