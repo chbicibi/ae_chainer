@@ -4,6 +4,7 @@ import os
 import shutil
 import sys
 import traceback
+from operator import itemgetter
 
 import numpy as np
 # import matplotlib.pyplot as plt
@@ -49,37 +50,43 @@ def get_extract(key):
     return D_.extract_uv_norm(vmin, vmax)
 
 
+def get_it(size):
+    def g_(key):
+        print('create data:', key)
+        cache_path = f'__cache__/{key}'
+        original_data = D_.get_original_data(key, size=2000) # (2000, 512, 1024, 5)
+        train_data = D_.get_train_data(get_extract(key), original_data,
+                                       name='full_norm', cache=True,
+                                       cache_path=cache_path)
+        a = train_data[2000-size:2000]
+        return a
+    return g_
+
+
 def get_task_data(_, modelname, batchsize=1):
     ''' 学習データ作成
     key == 'wing'
     '''
-    def f_(s):
-        def g_(key):
-            print('create data:', key)
-            cache_path = f'__cache__/{key}'
-            original_data = D_.get_original_data(key, size=2000) # (2000, 512, 1024, 5)
-            train_data = D_.get_train_data(get_extract(key), original_data,
-                                           name='full_norm', cache=True,
-                                           cache_path=cache_path)
-            a = train_data[2000-s:2000]
-            return a
-        return g_
 
     # 学習データ作成
     keys = 'wing_00', 'wing_10', 'wing_20', 'wing_30'
-    train = D_.MapChain(crop_random_sq, *map(f_(300), keys), name='random_crop')
+    train_data = D_.MapChain(crop_random_sq, *map(get_it(300), keys),
+                        name='random_crop')
+    train = TrainDataset(train_data)
     train_iter = SerialIterator(train, batchsize)
 
     # 検証データ作成
     keys = 'wing_05', 'wing_15'
-    valid = D_.MapChain(crop_random_sq, *map(f_(100), keys), name='random_crop')
+    valid_data = D_.MapChain(crop_random_sq, *map(get_it(100), keys),
+                        name='random_crop')
+    valid = TrainDataset(valid_data)
     valid_iter = SerialIterator(valid, batchsize, repeat=False, shuffle=False)
 
     # 学習モデル作成
-    sample = train[:1]
+    sample = train_data[:1]
     model = M_.get_model(modelname, sample=sample)
 
-    return model, train, train_iter, valid_iter
+    return model, train_data, train_iter, valid_iter
 
 
 ################################################################################
@@ -88,16 +95,37 @@ def get_task_data(_, modelname, batchsize=1):
 
 def crop_random_sq(frame):
     ''' frame: (C, H, W)
-    (2, 512, 1024) => (2, 384, 384)
+    (2, 512, 1024) => (2, 382, 382)
     random_range = 0:128, 0:640
     '''
     size = 382
     p = [np.random.randint(r - size) for r in frame.shape[1:]]
     if np.random.rand() < 0.5:
-        return frame[:, p[0]:p[0]+size, p[1]:p[1]+size]
+        s = slice(p[0], p[0]+size, 1)
     else:
-        e = p[0] - 1 if p[0] else None
-        return frame[:, p[0]+size-1:e:-1, p[1]:p[1]+size]
+        s = slice(p[0]+size-1, p[0]-1 if p[0] else None, -1)
+    return frame[:, s, p[1]:p[1]+size]
+
+
+def crop_center_sq(frame):
+    ''' frame: (C, H, W)
+    (2, 512, 1024) => (2, 382, 382)
+    '''
+    size = 382
+    p = [(r - size) // 2 for r in frame.shape[1:]]
+    return frame[:, p[0]:p[0]+size, p[1]:p[1]+size]
+
+
+class TrainDataset(chainer.dataset.DatasetMixin):
+    def __init__(self, it):
+        self.it = it
+
+    def __len__(self):
+        return len(self.it)
+
+    def get_example(self, i):
+        a = self.it[i]
+        return a, a
 
 
 ################################################################################
@@ -139,7 +167,7 @@ def task0(*args, **kwargs):
     # keys = 'plate_10', 'wing_00', 'plate_20', 'wing_15', 'plate_30', 'wing_05'
     # keys = 'wing_30',
     # keys = 'plate_30', 'plate_20', 'plate_10', 'plate_00', 'wing_30', 'wing_20', 'wing_10', 'wing_00'
-    name = 'case4_0'
+    name = kwargs.get('case', 'case4_0')
     out = f'__result__/{name}'
     error = None
 
@@ -193,18 +221,27 @@ def process1(key, modelname, out):
 
     file = check_snapshot(out)
 
-    model, train_data, train_iter, valid_iter = get_task_data(key, modelname)
+    # 学習データ作成
+    # keys = 'wing_00', 'wing_10', 'wing_20', 'wing_30'
+    keys = 'wing_20',
+    train_data = D_.MapChain(crop_center_sq, *map(get_it(300), keys),
+                        name='random_crop')
+    # train = TrainDataset(train_data)
+    # train_iter = SerialIterator(train, batchsize)
 
     # モデル読み込み
+    # model, train_data, train_iter, valid_iter = get_task_data(key, modelname)
+    sample = train_data[:1]
+    model = M_.get_model(modelname, sample=sample)
     chainer.serializers.load_npz(file, model, path='updater/model:main/')
-
     model.to_cpu()
 
     # データセット
     it_data = map(lambda a: model.xp.asarray(a[None, ...]), train_data)
 
     # モデル適用
-    it_forward = map(lambda x: model.link(x, inference=True), it_data)
+    it_forward = map(lambda x: model.predictor(x, inference=True, print_z=True),
+                     it_data)
 
     # 結果データ取得
     it_result = map(lambda v: v.array[0], it_forward)
@@ -224,7 +261,7 @@ def task1(*args, **kwargs):
 
     # keys = 'plate_10', 'wing_00', 'plate_20', 'wing_15', 'plate_30', 'wing_05'
     keys = 'wing_00',
-    name = 'case4_0'
+    name = kwargs.get('case', 'case4_0')
     out = f'__result__/{name}'
 
     if kwargs.get('check_snapshot'):
@@ -252,12 +289,14 @@ def get_args():
     parser.add_argument('mode', nargs='?', default='',
                         choices=['', '0', '1', '2'],
                         help='Number of main procedure')
+    parser.add_argument('--case', '-c', default='',
+                        help='Training case name')
     parser.add_argument('--gpu', '-g', type=int, default=0,
                         help='GPU ID (negative value indicates CPU)')
     parser.add_argument('--out', '-o', default='result',
                         help='Directory to output the result')
-    parser.add_argument('--clear', '-c', action='store_true',
-                        help='Remove directory at the beginning')
+    # parser.add_argument('--clear', '-c', action='store_true',
+    #                     help='Remove directory at the beginning')
     parser.add_argument('--no-progress', '-p', action='store_true',
                         help='Hide progress bar')
 
@@ -286,7 +325,6 @@ def main():
 
     # out = args.out
     out = f'result/{SRC_FILENAME}'
-    clear = args.clear
 
     if args.test:
         print(vars(args))
@@ -301,7 +339,7 @@ def main():
 
     # if args.mode == '01':
     #     with ut.stopwatch('sample01'):
-    #         sample01(out=out, clear=clear)
+    #         sample01(out=out, clear=args.clear)
     # elif args.mode == '1':
     #     model_path = ut.fsort(glob.glob(f'{out}/all/*.model'))[-1]
     #     print(model_path)

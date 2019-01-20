@@ -26,6 +26,9 @@ class VAELoss(chainer.Chain, N_.AEBase):
         self.adjust()
 
     def __call__(self, x, x_=None, **kwargs):
+        if x_ is None:
+            x_ = x
+
         q_z = self.encode(x, **kwargs)
 
         z = self.sample(q_z)
@@ -36,15 +39,20 @@ class VAELoss(chainer.Chain, N_.AEBase):
 
         p_z = self.prior()
 
-        if x_ is None:
-            x_ext = F.repeat(x, self.k, axis=0)
-        else:
-            x_ext = F.repeat(x_, self.k, axis=0)
+        x_ext = F.repeat(x_, self.k, axis=0)
+        # x_ext_ = F.broadcast_to(x_[None, :], (self.k, *x.shape))
+        # print(x_ext.shape)
+        # print(x_ext_.shape)
+        # print(p_x.batch_shape)
+        # # print(x_ext.shape)
+        # # print(x_ext.shape)
+        # exit()
 
         # print('p_x shape:', p_x.batch_shape)
         # print('x_ext shape:', x_ext.shape)
 
         reconstr = self.batch_mean(p_x.log_prob(x_ext))
+        # reconstr /= np.prod(x.shape[1:]) # => x
 
         # reconstr = F.mean(F.sum(p_x.log_prob(
         #     F.broadcast_to(x[None, ...], (self.k, *x.shape))), axis=-1))

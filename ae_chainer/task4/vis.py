@@ -73,7 +73,8 @@ def show_it_m(fn, it, nrows=1, ncols=2, vmin=-0.8, vmax=1.6):
     for i, data in enumerate(it):
         for ax, d in zip(axes, fn(data)):
             ax.cla()
-            p = ax.imshow(d, cmap=cmap, vmin=vmin, vmax=vmax)
+            # p = ax.imshow(d, cmap=cmap, vmin=vmin, vmax=vmax)
+            p = ax.imshow(d, cmap=cmap)
         # if not i:
         #     fig.colorbar(p, orientation='horizontal')#, ticks=[vmin, 1, vmax])
         axes[-1].annotate(f'{i}/{s}', xy=(1, -0.05), xycoords='axes fraction',
