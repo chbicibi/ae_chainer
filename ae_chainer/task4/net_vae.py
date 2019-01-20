@@ -131,6 +131,10 @@ class VAEChain(chainer.Chain, N_.AEBase):
         if kwargs.get('show_shape'):
             print(f'layer(E{self.name}): in: {x.shape} out: {mu.shape}')
 
+        # if kwargs.get('show_z'):
+        #     z = mu.array.reshape((-1,))
+        #     print(*(f'{s:.3f}' for s in z), end='\r')
+
         if kwargs.get('inference'):
             return mu # == D.Normal(loc=mu, log_scale=ln_sigma).mean
         else:

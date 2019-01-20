@@ -215,6 +215,11 @@ class CAEList(chainer.ChainList, AEBase):
             print('call CAEList:', self.count, ' '*20) #, end='\r')
         h = self.encode(x, **kwargs)
         y = self.decode(h, **kwargs)
+
+        if kwargs.get('show_z'):
+            z = h.array.reshape((-1,))
+            print(*(f'{s:.3f}' for s in z), end='\r')
+
         return y
 
     def encode(self, x, **kwargs):

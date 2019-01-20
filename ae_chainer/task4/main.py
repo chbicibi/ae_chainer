@@ -10,7 +10,7 @@ import numpy as np
 # import matplotlib.pyplot as plt
 
 import chainer
-# import chainer.functions as F
+import chainer.functions as F
 # import chainer.links as L
 # from chainer.datasets import mnist, cifar, split_dataset_random
 # from chainer.datasets.tuple_dataset import TupleDataset
@@ -223,7 +223,7 @@ def process1(key, modelname, out):
 
     # 学習データ作成
     # keys = 'wing_00', 'wing_10', 'wing_20', 'wing_30'
-    keys = 'wing_20',
+    keys = 'wing_30',
     train_data = D_.MapChain(crop_center_sq, *map(get_it(300), keys),
                         name='random_crop')
     # train = TrainDataset(train_data)
@@ -240,7 +240,7 @@ def process1(key, modelname, out):
     it_data = map(lambda a: model.xp.asarray(a[None, ...]), train_data)
 
     # モデル適用
-    it_forward = map(lambda x: model.predictor(x, inference=True, print_z=True),
+    it_forward = map(lambda x: model.predictor(x, inference=True, show_z=True),
                      it_data)
 
     # 結果データ取得
@@ -248,10 +248,14 @@ def process1(key, modelname, out):
 
     # 入力データと復号データを合成
     it_zip = zip(train_data, it_result)
+    def hook_(x0, x1):
+        print('\nmse:', F.mean_squared_error(x0, x1).array)
+        return x0, x1
+    it_zip_msehook = map(hook_, train_data, it_result)
 
     with chainer.using_config('train', False), chainer.no_backprop_mode():
         # V_.show_chainer_2c(it_result)
-        V_.show_chainer_2r2c(it_zip)
+        V_.show_chainer_2r2c(it_zip_msehook)
 
 
 def task1(*args, **kwargs):
