@@ -129,3 +129,19 @@ def show_chainer_2r2c(it):
     def ex_(frames):
         return chain(*frames)
     return show_it_m(ex_, it, nrows=2, ncols=2, vmin=vmin, vmax=vmax)
+
+
+def show_chainer_NrNc(it, nrows, ncols, direction='lr'):
+    vmin = 0
+    vmax = 1
+    def ex_(frames):
+        ''' fraes: ([frame00, frame01, ...], [frame10, frame11, ...], ...) '''
+        if direction == 'lr':
+            return chain(*frames)
+        if direction == 'rl':
+            return chain(*reversed(frames))
+        if direction == 'tb':
+            return chain(*zip(*frames))
+        if direction == 'bt':
+            return chain(*reversed(zip(*frames)))
+    return show_it_m(ex_, it, nrows=nrows, ncols=ncols, vmin=vmin, vmax=vmax)

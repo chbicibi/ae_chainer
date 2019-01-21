@@ -178,12 +178,11 @@ class CAEChain(chainer.Chain, AEBase):
         return y
 
     def decode(self, x, **kwargs):
-        if not x.shape[0] == self.indexes.shape[0]:
-            self.indexes = self.xp.repeat(self.indexes,
-                                          x.shape[0]//self.indexes.shape[0],
-                                          axis=0)
-
         if self.use_indices:
+            if not x.shape[0] == self.indexes.shape[0]:
+                self.indexes = self.xp.repeat(self.indexes,
+                                              x.shape[0]//self.indexes.shape[0],
+                                              axis=0)
             h = F.upsampling_2d(x, self.indexes, ksize=2, outsize=self.insize)
         else:
             h = F.unpooling_2d(x, ksize=2, outsize=self.insize)
@@ -214,11 +213,15 @@ class CAEList(chainer.ChainList, AEBase):
             self.count += 1
             print('call CAEList:', self.count, ' '*20) #, end='\r')
         h = self.encode(x, **kwargs)
-        y = self.decode(h, **kwargs)
+
+        if kwargs.get('convert_z') is not None:
+            h = kwargs.get('convert_z')(h)
 
         if kwargs.get('show_z'):
             z = h.array.reshape((-1,))
             print(*(f'{s:.3f}' for s in z), end='\r')
+
+        y = self.decode(h, **kwargs)
 
         return y
 

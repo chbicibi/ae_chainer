@@ -34,6 +34,21 @@ SRC_FILENAME = os.path.splitext(SRC_FILE)[0]
 
 ################################################################################
 
+def loop(data):
+    while True:
+        yield data
+
+
+def tapp(data, fn=None):
+    if fn:
+        print(*fn(data))
+    else:
+        print(data)
+    return data
+
+
+################################################################################
+
 def get_extract(key):
     vmin, vmax = {
         'plate_00': (-0.668, 1.261),
@@ -216,21 +231,19 @@ def check_snapshot(out, show=False):
     return file
 
 
-def process1(key, modelname, out):
+def process1(keys, modelname, out):
     ''' モデル読み出し+可視化 '''
 
     file = check_snapshot(out)
 
     # 学習データ作成
     # keys = 'wing_00', 'wing_10', 'wing_20', 'wing_30'
-    keys = 'wing_30',
     train_data = D_.MapChain(crop_center_sq, *map(get_it(300), keys),
                         name='random_crop')
     # train = TrainDataset(train_data)
     # train_iter = SerialIterator(train, batchsize)
 
     # モデル読み込み
-    # model, train_data, train_iter, valid_iter = get_task_data(key, modelname)
     sample = train_data[:1]
     model = M_.get_model(modelname, sample=sample)
     chainer.serializers.load_npz(file, model, path='updater/model:main/')
@@ -239,8 +252,18 @@ def process1(key, modelname, out):
     # データセット
     it_data = map(lambda a: model.xp.asarray(a[None, ...]), train_data)
 
+    def convert_z(z, t_=[0]):
+        t = t_[0]
+        a = np.zeros_like(z)
+        a[:, 0] = t * np.cos(t)
+        a[:, 1] = t * np.sin(t)
+        t_[0] += 0.01 * np.pi
+        # a = np.ones_like(z)
+        return z * 0 + a
+
     # モデル適用
     it_forward = map(lambda x: model.predictor(x, inference=True, show_z=True),
+                                               # convert_z=convert_z),
                      it_data)
 
     # 結果データ取得
@@ -258,8 +281,67 @@ def process1(key, modelname, out):
         V_.show_chainer_2r2c(it_zip_msehook)
 
 
-def task1(*args, **kwargs):
-    ''' task1: 可視化 '''
+################################################################################
+
+def process2(keys, modelname, out):
+    ''' モデル読み出し+可視化 '''
+
+    file = check_snapshot(out)
+
+    # 学習データ作成
+    train_data = D_.MapChain(crop_center_sq, *map(get_it(300), keys))
+
+    # モデル読み込み
+    sample = train_data[:1]
+    model = M_.get_model(modelname, sample=sample)
+    chainer.serializers.load_npz(file, model, path='updater/model:main/')
+    model.to_cpu()
+
+    # データセット
+    it_data = map(lambda a: model.xp.asarray(a[None, ...]), train_data)
+
+    X = train_data[100:101], train_data[200:201]
+    Z = [model.predictor.encode(model.xp.asarray(x), inference=True) for x in X]
+
+    for z in Z:
+        print(z.array)
+
+    it_z = (Z[0]*i+Z[1]*(1-i) for i in np.arange(0, 1, 0.01))
+
+    # モデル適用
+    it_zp = map(lambda z: tapp(z, lambda d: (f'{s:.3f}' for s in d.array.flatten())), it_z)
+    it_decode = map(lambda z: model.predictor.decode(z, inference=True), it_zp)
+
+    # def convert_z(z, t_=[0]):
+    #     t = t_[0]
+    #     a = np.zeros_like(z)
+    #     a[:, 0] = t * np.cos(t)
+    #     a[:, 1] = t * np.sin(t)
+    #     t_[0] += 0.01 * np.pi
+    #     # a = np.ones_like(z)
+    #     return z * 0 + a
+
+    # it_forward = map(lambda x: model.predictor(x, inference=True, show_z=True),
+    #                                            # convert_z=convert_z),
+    #                  it_data)
+
+    # 結果データ取得
+    it_result = map(lambda v: v.array[0], it_decode)
+
+    # # 入力データと復号データを合成
+    it_zip = zip(loop(train_data[100]), loop(train_data[200]), it_result)
+    # def hook_(x0, x1):
+    #     print('\nmse:', F.mean_squared_error(x0, x1).array)
+    #     return x0, x1
+    # it_zip_msehook = map(hook_, train_data, it_result)
+
+    with chainer.using_config('train', False), chainer.no_backprop_mode():
+        # V_.show_chainer_2c(it_result)
+        V_.show_chainer_NrNc(it_zip, nrows=2, ncols=3, direction='tb')
+
+
+def task2(*args, **kwargs):
+    ''' task2: VAEのz入力から復元の可視化 '''
 
     print(sys._getframe().f_code.co_name)
 
@@ -272,8 +354,7 @@ def task1(*args, **kwargs):
         check_snapshot(out, show=True)
         return
 
-    for key in keys:
-        process1(key, name, out)
+    process2(keys, name, out)
 
 
 ################################################################################
