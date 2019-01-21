@@ -1,5 +1,6 @@
 import argparse
 import glob
+import itertools
 import os
 import shutil
 import sys
@@ -22,6 +23,7 @@ import myutils as ut
 
 import common as C_
 import dataset as D_
+import net_vae as NV_
 import model as M_
 import vis as V_
 
@@ -263,16 +265,23 @@ def process1(keys, modelname, out):
 
     # plot z
     fig, ax = plt.subplots()
-    def log_z(z, l=[]):
+    def log_z(z=None, l=[]):
+        if z is None:
+            ax.plot(np.array(l))
+            fig.savefig(f'z_log_{modelname}.png')
+            return
         ax.cla()
         l.append(z.array.flatten())
         ax.plot(np.array(l))
         return z
 
     # モデル適用
-    it_forward = map(lambda x: model.predictor(x, inference=True, show_z=True,
-                                               convert_z=log_z),
-                     it_data)
+    def apply_model(x):
+        y = model.predictor(x, inference=True, show_z=True, convert_z=log_z)
+        if isinstance(model, NV_.VAELoss):
+            y = F.sigmoid(y)
+        return y
+    it_forward = map(apply_model, it_data)
 
     # 結果データ取得
     it_result = map(lambda v: v.array[0], it_forward)
@@ -287,6 +296,7 @@ def process1(keys, modelname, out):
     with chainer.using_config('train', False), chainer.no_backprop_mode():
         # V_.show_chainer_2c(it_result)
         V_.show_chainer_2r2c(it_zip_msehook)
+    log_z()
 
 
 def task1(*args, **kwargs):
@@ -332,46 +342,48 @@ def process2(keys, modelname, out):
     X_20 = train_data_20[30:31]
     X_30 = train_data_30[0:1]
     X = X_10, X_30
-    Z = [model.predictor.encode(model.xp.asarray(x), inference=True) for x in X]
+    with chainer.using_config('train', False), chainer.no_backprop_mode():
+        Z = [model.predictor.encode(model.xp.asarray(x), inference=True)
+             for x in X]
 
     def print_z(z):
         print(*(f'{s:.3f}' for s in z.array.flatten()))
+        return z
+
+    fig, ax = plt.subplots()
+    def plot_z(z=None, l=[]):
+        if z is None:
+            ax.plot(np.array(l))
+            fig.savefig(f'z_log_man_{modelname}.png')
+            return
+        ax.cla()
+        l.append(z.array.flatten())
+        ax.plot(np.array(l))
         return z
 
     for z in Z:
         print_z(z)
 
     # モデル適用
-    it_z = (Z[0]*i+Z[1]*(1-i) for i in np.arange(0, 1, 0.01))
-    it_zp = map(print_z, it_z)
-    it_decode = map(lambda z: model.predictor.decode(z, inference=True), it_zp)
+    def apply_model(z):
+        y = model.predictor.decode(z, inference=True)
+        if isinstance(model, NV_.VAELoss):
+            y = F.sigmoid(y)
+        return y
 
-    # def convert_z(z, t_=[0]):
-    #     t = t_[0]
-    #     a = np.zeros_like(z)
-    #     a[:, 0] = t * np.cos(t)
-    #     a[:, 1] = t * np.sin(t)
-    #     t_[0] += 0.01 * np.pi
-    #     # a = np.ones_like(z)
-    #     return z * 0 + a
-
-    # it_forward = map(lambda x: model.predictor(x, inference=True, show_z=True),
-    #                                            # convert_z=convert_z),
-    #                  it_data)
+    it_z = (Z[0]*(1-i)+Z[1]*i for i in np.arange(0, 1, 0.01))
+    it_zp = map(plot_z, it_z)
+    it_decode = map(apply_model, it_zp)
 
     # 結果データ取得
     it_result = map(lambda v: v.array[0], it_decode)
 
     # # 入力データと復号データを合成
     it_zip = zip(loop(X[0][0]), loop(X[1][0]), it_result)
-    # def hook_(x0, x1):
-    #     print('\nmse:', F.mean_squared_error(x0, x1).array)
-    #     return x0, x1
-    # it_zip_msehook = map(hook_, train_data, it_result)
 
     with chainer.using_config('train', False), chainer.no_backprop_mode():
-        # V_.show_chainer_2c(it_result)
         V_.show_chainer_NrNc(it_zip, nrows=2, ncols=3, direction='tb')
+    plot_z()
 
 
 def task2(*args, **kwargs):

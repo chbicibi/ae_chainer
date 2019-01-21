@@ -70,6 +70,8 @@ def show_it_m(fn, it, nrows=1, ncols=2, vmin=-0.8, vmax=1.6):
     else:
         s = '?'
 
+    os.makedirs('__img__', exist_ok=True)
+
     for i, data in enumerate(it):
         for ax, d in zip(axes, fn(data)):
             ax.cla()
@@ -80,7 +82,10 @@ def show_it_m(fn, it, nrows=1, ncols=2, vmin=-0.8, vmax=1.6):
         axes[-1].annotate(f'{i}/{s}', xy=(1, -0.05), xycoords='axes fraction',
                           horizontalalignment='right',
                           verticalalignment='top')
+        if i % 5 == 0:
+            fig.savefig(f'__img__/step{i}.png')
         plt.pause(0.01)
+    fig.savefig(f'__img__/step{i}.png')
 
 
 ################################################################################
