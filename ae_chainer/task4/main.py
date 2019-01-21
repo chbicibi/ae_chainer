@@ -7,7 +7,7 @@ import traceback
 from operator import itemgetter
 
 import numpy as np
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
 import chainer
 import chainer.functions as F
@@ -239,7 +239,7 @@ def process1(keys, modelname, out):
     # 学習データ作成
     # keys = 'wing_00', 'wing_10', 'wing_20', 'wing_30'
     train_data = D_.MapChain(crop_center_sq, *map(get_it(300), keys),
-                        name='random_crop')
+                             name='center_crop')
     # train = TrainDataset(train_data)
     # train_iter = SerialIterator(train, batchsize)
 
@@ -261,9 +261,17 @@ def process1(keys, modelname, out):
         # a = np.ones_like(z)
         return z * 0 + a
 
+    # plot z
+    fig, ax = plt.subplots()
+    def log_z(z, l=[]):
+        ax.cla()
+        l.append(z.array.flatten())
+        ax.plot(np.array(l))
+        return z
+
     # モデル適用
-    it_forward = map(lambda x: model.predictor(x, inference=True, show_z=True),
-                                               # convert_z=convert_z),
+    it_forward = map(lambda x: model.predictor(x, inference=True, show_z=True,
+                                               convert_z=log_z),
                      it_data)
 
     # 結果データ取得
@@ -281,6 +289,23 @@ def process1(keys, modelname, out):
         V_.show_chainer_2r2c(it_zip_msehook)
 
 
+def task1(*args, **kwargs):
+    ''' task1: VAEの復元の可視化 '''
+
+    print(sys._getframe().f_code.co_name)
+
+    # keys = 'plate_10', 'wing_00', 'plate_20', 'wing_15', 'plate_30', 'wing_05'
+    keys = 'wing_30',
+    name = kwargs.get('case', 'case4_0')
+    out = f'__result__/{name}'
+
+    if kwargs.get('check_snapshot'):
+        check_snapshot(out, show=True)
+        return
+
+    process1(keys, name, out)
+
+
 ################################################################################
 
 def process2(keys, modelname, out):
@@ -289,7 +314,11 @@ def process2(keys, modelname, out):
     file = check_snapshot(out)
 
     # 学習データ作成
-    train_data = D_.MapChain(crop_center_sq, *map(get_it(300), keys))
+    train_data_00 = D_.MapChain(crop_center_sq, get_it(300)('wing_00'))
+    train_data_10 = D_.MapChain(crop_center_sq, get_it(300)('wing_10'))
+    train_data_20 = D_.MapChain(crop_center_sq, get_it(300)('wing_20'))
+    train_data_30 = D_.MapChain(crop_center_sq, get_it(300)('wing_30'))
+    train_data = train_data_10
 
     # モデル読み込み
     sample = train_data[:1]
@@ -298,18 +327,23 @@ def process2(keys, modelname, out):
     model.to_cpu()
 
     # データセット
-    it_data = map(lambda a: model.xp.asarray(a[None, ...]), train_data)
-
-    X = train_data[100:101], train_data[200:201]
+    X_00 = train_data_00[10:11]
+    X_10 = train_data_10[15:16]
+    X_20 = train_data_20[30:31]
+    X_30 = train_data_30[0:1]
+    X = X_10, X_30
     Z = [model.predictor.encode(model.xp.asarray(x), inference=True) for x in X]
 
-    for z in Z:
-        print(z.array)
+    def print_z(z):
+        print(*(f'{s:.3f}' for s in z.array.flatten()))
+        return z
 
-    it_z = (Z[0]*i+Z[1]*(1-i) for i in np.arange(0, 1, 0.01))
+    for z in Z:
+        print_z(z)
 
     # モデル適用
-    it_zp = map(lambda z: tapp(z, lambda d: (f'{s:.3f}' for s in d.array.flatten())), it_z)
+    it_z = (Z[0]*i+Z[1]*(1-i) for i in np.arange(0, 1, 0.01))
+    it_zp = map(print_z, it_z)
     it_decode = map(lambda z: model.predictor.decode(z, inference=True), it_zp)
 
     # def convert_z(z, t_=[0]):
@@ -329,7 +363,7 @@ def process2(keys, modelname, out):
     it_result = map(lambda v: v.array[0], it_decode)
 
     # # 入力データと復号データを合成
-    it_zip = zip(loop(train_data[100]), loop(train_data[200]), it_result)
+    it_zip = zip(loop(X[0][0]), loop(X[1][0]), it_result)
     # def hook_(x0, x1):
     #     print('\nmse:', F.mean_squared_error(x0, x1).array)
     #     return x0, x1
