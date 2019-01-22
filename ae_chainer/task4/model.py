@@ -236,6 +236,28 @@ def get_model_case4_1():
     return loss
 
 
+def get_model_case4_2():
+    ''' VAE
+    1 4 10 22 46 94 190 382
+    2 6 14 30 62 126 254 510
+    3 8 18 38 78 158 318
+    '''
+
+    # 入出力チャンネル数を指定
+    model = N_.CAEList(
+        N_.CAEChain(2, 8, use_indices=False, activation=(F.relu, None)),
+        N_.CAEChain(8, 16, use_indices=False),
+        N_.CAEChain(16, 32, use_indices=False),
+        N_.CAEChain(32, 64, use_indices=False),
+        N_.CAEChain(64, 64, use_indices=False),
+        N_.CAEChain(64, 128, use_indices=False),
+        N_.CAEChain(128, 256, use_indices=False),
+        NV_.VAEChain(None, 64))
+
+    loss = NV_.VAELoss(model, beta=1.0, k=1)
+    return loss
+
+
 def get_model_case5_0():
     ''' AE
     1 4 10 22 46 94 190 382

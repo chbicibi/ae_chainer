@@ -9,6 +9,7 @@ from operator import itemgetter
 
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.colors as plc
 
 import chainer
 import chainer.functions as F
@@ -145,6 +146,11 @@ class TrainDataset(chainer.dataset.DatasetMixin):
         return a, a
 
 
+def vorticity(frame):
+    return frame[0, :-2, 1:-1] - frame[0, 2:, 1:-1] \
+         - frame[1, 1:-1, :-2] + frame[1, 1:-1, 2:]
+
+
 ################################################################################
 
 def process0(key, modelname, out):
@@ -164,7 +170,7 @@ def process0_resume(key, modelname, out):
     ''' オートエンコーダ学習 '''
 
     # 学習パラメータ定義
-    epoch = 1000
+    epoch = 3000
     batchsize = 50
     logdir = f'{out}/res_{key}_{modelname}_{ut.snow}'
 
@@ -265,8 +271,10 @@ def process1(keys, modelname, out):
 
     # plot z
     fig, ax = plt.subplots()
-    def log_z(z=None, l=[]):
+    def plot_z(z=None, l=[]):
         if z is None:
+            if not l:
+                return
             ax.plot(np.array(l))
             fig.savefig(f'z_log_{modelname}.png')
             return
@@ -277,7 +285,7 @@ def process1(keys, modelname, out):
 
     # モデル適用
     def apply_model(x):
-        y = model.predictor(x, inference=True, show_z=True, convert_z=log_z)
+        y = model.predictor(x, inference=True, show_z=True, convert_z=plot_z)
         if isinstance(model, NV_.VAELoss):
             y = F.sigmoid(y)
         return y
@@ -288,15 +296,25 @@ def process1(keys, modelname, out):
 
     # 入力データと復号データを合成
     it_zip = zip(train_data, it_result)
-    def hook_(x0, x1):
+    def hook_(x0, x1, *rest):
         print('\nmse:', F.mean_squared_error(x0, x1).array)
         return x0, x1
-    it_zip_msehook = map(hook_, train_data, it_result)
+    it_zip_with_mse = map(hook_, train_data, it_result)
+
+    colors = [(0, 'red'), (0.5, 'black'), (1, 'green')]
+    cmap = plc.LinearSegmentedColormap.from_list('custom_cmap', colors)
+    def plot_vor(frame):
+        vor = vorticity(frame)
+        def f_(ax):
+            ax.imshow(vor, cmap=cmap, vmin=-0.07, vmax=0.07)
+        return f_
+
+    it_zip_msehook_with_vor = map(lambda vs: [(*v, plot_vor(v)) for v in vs], it_zip_with_mse)
 
     with chainer.using_config('train', False), chainer.no_backprop_mode():
         # V_.show_chainer_2c(it_result)
-        V_.show_chainer_2r2c(it_zip_msehook)
-    log_z()
+        V_.show_chainer_NrNc(it_zip_msehook_with_vor, nrows=2, ncols=3, direction='lr')
+    plot_z()
 
 
 def task1(*args, **kwargs):
@@ -375,14 +393,24 @@ def process2(keys, modelname, out):
     it_zp = map(plot_z, it_z)
     it_decode = map(apply_model, it_zp)
 
+    colors = [(0, 'red'), (0.5, 'black'), (1, 'green')]
+    cmap = plc.LinearSegmentedColormap.from_list('custom_cmap', colors)
+    def plot_vor(frame):
+        vor = vorticity(frame)
+        def f_(ax):
+            ax.imshow(vor, cmap=cmap, vmin=-0.07, vmax=0.07)
+        return f_
+
     # 結果データ取得
     it_result = map(lambda v: v.array[0], it_decode)
+    it_add_vor = map(lambda v: (*v, vorticity(v)), it_result)
 
     # # 入力データと復号データを合成
     it_zip = zip(loop(X[0][0]), loop(X[1][0]), it_result)
+    it_zip_with_vor = map(lambda vs: [(*v, plot_vor(v)) for v in vs], it_zip)
 
     with chainer.using_config('train', False), chainer.no_backprop_mode():
-        V_.show_chainer_NrNc(it_zip, nrows=2, ncols=3, direction='tb')
+        V_.show_chainer_NrNc(it_zip_with_vor, nrows=3, ncols=3, direction='tb')
     plot_z()
 
 
@@ -413,6 +441,34 @@ def __test__():
 
 def __test__():
     crop_random_sq(np.ones((2, 512, 1024), dtype=np.float32))
+
+
+def __test__():
+    frame = get_it(1)('wing_30')[0]
+    vel = frame[0, :-2, 1:-1] - frame[0, 2:, 1:-1] \
+        - frame[1, 1:-1, :-2] + frame[1, 1:-1, 2:]
+        # + frame[1, :-2] + frame[1, 1:-1] + frame[1, 2:] \
+        # - frame[1, :-2] + frame[1, 1:-1] + frame[1, 2:]
+
+    colors = [(0, 'red'), (0.5, 'black'), (1, 'green')]
+    cmap = plc.LinearSegmentedColormap.from_list('custom_cmap', colors)
+
+    maxval = np.abs(frame).max()
+
+    plt.imshow(vel, cmap=cmap, vmin=-0.1, vmax=0.1)
+    plt.show()
+    print(vel.shape, maxval)
+
+
+def __test__():
+    with ut.chdir(f'{SRC_DIR}/__result__/case4_2'):
+        path = ut.select_file('.', key=r'res_.*')
+        with ut.chdir(path):
+            log = ut.load('log.json', from_json=True)
+            loss = [l['main/loss'] for l in log]
+            plt.ylim((180000, 210000))
+            plt.plot(np.array(loss))
+            plt.show()
 
 
 def get_args():
@@ -458,7 +514,7 @@ def main():
     out = f'result/{SRC_FILENAME}'
 
     if args.test:
-        print(vars(args))
+        # print(vars(args))
         __test__()
 
     elif args.mode in '0123456789':
