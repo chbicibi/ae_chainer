@@ -146,9 +146,16 @@ class TrainDataset(chainer.dataset.DatasetMixin):
         return a, a
 
 
-def vorticity(frame):
+def vorticity1(frame):
     return frame[0, :-2, 1:-1] - frame[0, 2:, 1:-1] \
          - frame[1, 1:-1, :-2] + frame[1, 1:-1, 2:]
+
+
+def vorticity(frame):
+    return (frame[0, :-2, :-2] + frame[0, :-2, 1:-1] + frame[0, :-2, 2:] \
+          - frame[0, 2:, 1:-1] - frame[0,  2:, 1:-1] - frame[0,  2:, 2:] \
+          - frame[1, :-2, :-2] - frame[1, 1:-1, :-2] - frame[1, 2:, :-2] \
+          + frame[1, :-2,  2:] + frame[1, 1:-1,  2:] + frame[1, 2:, 2:]) / 3
 
 
 ################################################################################
@@ -234,8 +241,12 @@ def check_snapshot(out, show=False):
         with np.load(file) as npzfile:
             for f in npzfile:
                 print(f)
+                continue
+                if f[-1] == 'W':
+                    print(f)
+                    print(npzfile[f].shape)
                 # print(npzfile[f].dtype, npzfile[f].shape, f)
-            print(npzfile['extensions/LogReport/_log'])
+            # print(npzfile['extensions/LogReport/_log'])
     return file
 
 
@@ -285,7 +296,7 @@ def process1(keys, modelname, out):
 
     # モデル適用
     def apply_model(x):
-        y = model.predictor(x, inference=True, show_z=True, convert_z=plot_z)
+        y = model.predictor(x, inference=True, show_z=False, convert_z=plot_z)
         if isinstance(model, NV_.VAELoss):
             y = F.sigmoid(y)
         return y
@@ -296,24 +307,44 @@ def process1(keys, modelname, out):
 
     # 入力データと復号データを合成
     it_zip = zip(train_data, it_result)
+    mse_list = []
     def hook_(x0, x1, *rest):
-        print('\nmse:', F.mean_squared_error(x0, x1).array)
+        mse = F.mean_squared_error(x0, x1).array
+        print('mse:', mse)
+        mse_list.append(mse)
         return x0, x1
     it_zip_with_mse = map(hook_, train_data, it_result)
 
-    colors = [(0, 'red'), (0.5, 'black'), (1, 'green')]
+    # plot mse
+    if False:
+        with chainer.using_config('train', False), chainer.no_backprop_mode():
+            file = f'mse_{modelname}_{keys[0]}.npy'
+            if os.path.isfile(file):
+                mse_list = np.load(file)
+            else:
+                list(it_zip_with_mse)
+                mse_list = np.array(mse_list)
+                np.save(file, mse_list)
+            fig, ax = plt.subplots()
+            ax.plot(mse_list)
+            plt.show()
+            return
+
+    colors = [(0, 'red'), (0.5, 'black'), (1, '#00ff00')]
     cmap = plc.LinearSegmentedColormap.from_list('custom_cmap', colors)
     def plot_vor(frame):
         vor = vorticity(frame)
         def f_(ax):
-            ax.imshow(vor, cmap=cmap, vmin=-0.07, vmax=0.07)
+            ax.imshow(vor, cmap=cmap, vmin=-0.1, vmax=0.1)
         return f_
 
     it_zip_msehook_with_vor = map(lambda vs: [(*v, plot_vor(v)) for v in vs], it_zip_with_mse)
 
     with chainer.using_config('train', False), chainer.no_backprop_mode():
-        # V_.show_chainer_2c(it_result)
-        V_.show_chainer_NrNc(it_zip_msehook_with_vor, nrows=2, ncols=3, direction='lr')
+        with ut.chdir('__img__'):
+            # V_.show_chainer_2c(it_result)
+            V_.show_chainer_NrNc(it_zip_msehook_with_vor, nrows=3, ncols=2,
+                                 direction='ub')
     plot_z()
 
 
@@ -323,7 +354,7 @@ def task1(*args, **kwargs):
     print(sys._getframe().f_code.co_name)
 
     # keys = 'plate_10', 'wing_00', 'plate_20', 'wing_15', 'plate_30', 'wing_05'
-    keys = 'wing_30',
+    keys = 'plate_30',
     name = kwargs.get('case', 'case4_0')
     out = f'__result__/{name}'
 
@@ -332,6 +363,67 @@ def task1(*args, **kwargs):
         return
 
     process1(keys, name, out)
+
+
+def plot_mse_0():
+    # case = 'case4_2'
+    case = 'case5_1'
+    model = 'VAE' if '4' in case else 'AE'
+    fig, ax = plt.subplots()
+    fig.subplots_adjust(left=0.15, bottom=0.1, right=0.98, top=0.98,
+                        wspace=0.1, hspace=0.2)
+
+    for d in ['top', 'right']:
+      ax.spines[d].set_visible(False)
+      # ax.spines[d].set_linewidth(0.5)
+
+    ax.set_ylim(0, 0.002)
+    ax.set_xlabel('steps')
+    ax.set_ylabel('mean squared error [-]')
+
+
+    for a in ('00', '10', '20', '30'):
+        file = f'mse_{case}_wing_{a}.npy'
+
+        mse = np.load(file)
+        label = model + ' $\\alpha=$' + str(int(a)) + '°'
+        ax.plot(mse, label=label)
+    ax.legend()
+    fig.savefig(f'mse_{case}.png')
+    plt.show()
+
+
+def plot_mse_1():
+    case = 'case4_2'
+    # case = 'case5_1'
+    grid = 'wing'
+    alphas = ('05', '15')
+    model = 'VAE' if '4' in case else 'AE'
+    fig, ax = plt.subplots()
+    fig.subplots_adjust(left=0.15, bottom=0.1, right=0.98, top=0.98,
+                        wspace=0.1, hspace=0.2)
+
+    for d in ['top', 'right']:
+      ax.spines[d].set_visible(False)
+      # ax.spines[d].set_linewidth(0.5)
+
+    ax.set_ylim(0, 0.004)
+    ax.set_xlabel('steps')
+    ax.set_ylabel('mean squared error [-]')
+
+
+    for a in alphas:
+        file = f'mse_{case}_{grid}_{a}.npy'
+
+        mse = np.load(file)
+        label = model + ' $\\alpha=$' + str(int(a)) + '°'
+        ax.plot(mse, label=label)
+    ax.legend()
+    fig.savefig(f'mse_{grid}_{case}.png')
+    plt.show()
+
+
+plot_mse = plot_mse_1
 
 
 ################################################################################
@@ -379,8 +471,8 @@ def process2(keys, modelname, out):
         ax.plot(np.array(l))
         return z
 
-    for z in Z:
-        print_z(z)
+    # for z in Z:
+    #     print_z(z)
 
     # モデル適用
     def apply_model(z):
@@ -393,7 +485,7 @@ def process2(keys, modelname, out):
     it_zp = map(plot_z, it_z)
     it_decode = map(apply_model, it_zp)
 
-    colors = [(0, 'red'), (0.5, 'black'), (1, 'green')]
+    colors = [(0, 'red'), (0.5, 'black'), (1, '#00ff00')]
     cmap = plc.LinearSegmentedColormap.from_list('custom_cmap', colors)
     def plot_vor(frame):
         vor = vorticity(frame)
@@ -410,7 +502,9 @@ def process2(keys, modelname, out):
     it_zip_with_vor = map(lambda vs: [(*v, plot_vor(v)) for v in vs], it_zip)
 
     with chainer.using_config('train', False), chainer.no_backprop_mode():
-        V_.show_chainer_NrNc(it_zip_with_vor, nrows=3, ncols=3, direction='tb')
+        with ut.chdir(f'__img__/man_with_vor/{modelname}'):
+            V_.show_chainer_NrNc(it_zip_with_vor, nrows=3, ncols=3,
+                                 direction='tb')
     plot_z()
 
 
@@ -469,6 +563,10 @@ def __test__():
             plt.ylim((180000, 210000))
             plt.plot(np.array(loss))
             plt.show()
+
+
+def __test__():
+    plot_mse()
 
 
 def get_args():

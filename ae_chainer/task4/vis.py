@@ -1,4 +1,5 @@
 import argparse
+import math
 import os
 import shutil
 import sys
@@ -19,6 +20,100 @@ def extract_u(frame):
 
 def extract_v(frame):
     return frame[:, :, 1]
+
+
+################################################################################
+
+def remove_border(ax):
+    for d in ['top', 'bottom', 'left', 'right']:
+        ax.spines[d].set_visible(False)
+
+
+def show_frame_vor(frame):
+    fig, ax = plt.subplots()
+    ax.tick_params(left=False, labelleft=False,
+                   bottom=None, labelbottom=False)
+
+    colors = [(0, '#ff0000'), (0.5, '#000000'), (1, '#00ff00')]
+    cmap = plc.LinearSegmentedColormap.from_list('custom_cmap', colors)
+
+    ax.imshow(frame, cmap=cmap, vmin=-0.1, vmax=0.1)
+    plt.show()
+
+
+def show_frame_m(frames, fig, axes):
+    # nbatch = frames.shape[0]
+    # ncols = math.floor(math.sqrt(nbatch))
+    # nrows = math.ceil(nbatch / ncols)
+    # figsize = (ncols*frames.shape[2]+0.1*ncols*(frames.shape[2]-1),
+    #            nrows*frames.shape[1]+0.1*nrows*(frames.shape[1]-1))
+
+    # fig, axes = plt.subplots(nrows, ncols, figsize=figsize, dpi=1)
+    # print(axes.shape, figsize)
+    if isinstance(axes, np.ndarray):
+        axes = axes.flatten()
+    else:
+        axes = np.array([axes])
+
+    fig.subplots_adjust(left=0, bottom=0, right=1, top=1, wspace=0.1, hspace=0.1)
+    for ax in axes:
+        ax.tick_params(left=False, labelleft=False,
+                       bottom=None, labelbottom=False)
+    # for ax in axes[len(frames):]:
+        remove_border(ax)
+
+    colors = [(0, '#000000'), (1, '#ffffff')]
+    cmap = plc.LinearSegmentedColormap.from_list('custom_cmap', colors)
+
+    for frame, ax in zip(frames, axes):
+        if callable(frame):
+            frame(ax)
+        else:
+            ax.imshow(frame, cmap=cmap, vmin=0)
+
+    fig.savefig('image.png', aspect='auto', bbox_inches='tight')
+    plt.show()
+
+
+def show_frame_filter(frames):
+    nbatch = frames.shape[0]
+    ncols = math.floor(math.sqrt(nbatch))
+    nrows = math.ceil(nbatch / ncols)
+    figsize = (ncols*frames.shape[2]+0.1*ncols*(frames.shape[2]-1),
+               nrows*frames.shape[1]+0.1*nrows*(frames.shape[1]-1))
+
+    fig, axes = plt.subplots(nrows, ncols, figsize=figsize, dpi=1)
+    print(axes.shape, figsize)
+    return show_frame_m(frame, fig, axes)
+
+
+def plot_vel(frame, ax):
+    colors = [(0, '#ff0000'), (0.5, '#000000'), (1, '#0000ff')]
+    cmap = plc.LinearSegmentedColormap.from_list('custom_cmap', colors)
+    ax.imshow(frame, cmap=cmap)
+
+
+def plot_vor(frame, ax):
+    colors = [(0, '#ff0000'), (0.5, '#000000'), (1, '#00ff00')]
+    cmap = plc.LinearSegmentedColormap.from_list('custom_cmap', colors)
+    ax.imshow(frame, cmap=cmap, vmin=-0.1, vmax=0.1)
+
+
+def show_frame_uvo(frames):
+    fig, axes = plt.subplots(nrows=1, ncols=3)
+    data = list(map(lambda f, d: lambda ax: f(d, ax), (plot_vel, plot_vel, plot_vor), frames))
+    return show_frame_m(data, fig, axes)
+
+
+def show_frame(frame, exf=None):
+    if frame.ndim == 2:
+        return show_frame_vor(frame)
+    elif frame.ndim == 3:
+        if exf:
+            data = [*frame, exf(frame)]
+            return show_frame_uvo(data)
+        else:
+            return show_frame_filter(frame)
 
 
 ################################################################################
@@ -70,8 +165,6 @@ def show_it_m(fn, it, nrows=1, ncols=2, vmin=-0.8, vmax=1.6):
     else:
         s = '?'
 
-    os.makedirs('__img__', exist_ok=True)
-
     for i, data in enumerate(it):
         for ax, d in zip(axes, fn(data)):
             ax.cla()
@@ -86,9 +179,9 @@ def show_it_m(fn, it, nrows=1, ncols=2, vmin=-0.8, vmax=1.6):
                           horizontalalignment='right',
                           verticalalignment='top')
         if i % 5 == 0:
-            fig.savefig(f'__img__/step{i}.png')
+            fig.savefig(f'step{i}.png')
         plt.pause(0.01)
-    fig.savefig(f'__img__/step{i}.png')
+    fig.savefig(f'step{i}.png')
 
 
 ################################################################################
