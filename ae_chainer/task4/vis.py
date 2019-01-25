@@ -3,6 +3,7 @@ import math
 import os
 import shutil
 import sys
+from contextlib import contextmanager
 from itertools import chain
 
 import numpy as np
@@ -29,7 +30,7 @@ def remove_border(ax):
         ax.spines[d].set_visible(False)
 
 
-def show_frame_vor(frame):
+def show_frame_vor(frame, file=None):
     fig, ax = plt.subplots()
     ax.tick_params(left=False, labelleft=False,
                    bottom=None, labelbottom=False)
@@ -41,21 +42,13 @@ def show_frame_vor(frame):
     plt.show()
 
 
-def show_frame_m(frames, fig, axes):
-    # nbatch = frames.shape[0]
-    # ncols = math.floor(math.sqrt(nbatch))
-    # nrows = math.ceil(nbatch / ncols)
-    # figsize = (ncols*frames.shape[2]+0.1*ncols*(frames.shape[2]-1),
-    #            nrows*frames.shape[1]+0.1*nrows*(frames.shape[1]-1))
-
-    # fig, axes = plt.subplots(nrows, ncols, figsize=figsize, dpi=1)
-    # print(axes.shape, figsize)
+def show_frame_m(frames, fig, axes, file=None):
     if isinstance(axes, np.ndarray):
         axes = axes.flatten()
     else:
         axes = np.array([axes])
 
-    fig.subplots_adjust(left=0, bottom=0, right=1, top=1, wspace=0.1, hspace=0.1)
+    fig.subplots_adjust(left=0, bottom=0, right=1, top=1, wspace=0.05, hspace=0.05)
     for ax in axes:
         ax.tick_params(left=False, labelleft=False,
                        bottom=None, labelbottom=False)
@@ -71,20 +64,30 @@ def show_frame_m(frames, fig, axes):
         else:
             ax.imshow(frame, cmap=cmap, vmin=0)
 
-    fig.savefig('image.png', aspect='auto', bbox_inches='tight')
-    plt.show()
+    if isinstance(file, str):
+        fig.savefig(file, aspect='auto', bbox_inches='tight', pad_inches=0)
+    elif isinstance(file, float):
+        plt.pause(file)
+    else:
+        plt.show()
 
 
-def show_frame_filter(frames):
+def show_frame_filter_env(frames, tr=False, file=None):
     nbatch = frames.shape[0]
     ncols = math.floor(math.sqrt(nbatch))
     nrows = math.ceil(nbatch / ncols)
-    figsize = (ncols*frames.shape[2]+0.1*ncols*(frames.shape[2]-1),
-               nrows*frames.shape[1]+0.1*nrows*(frames.shape[1]-1))
+    if tr or ncols < 3:
+        nrows, ncols = ncols, nrows
+    figsize = (ncols*frames.shape[2]+max(0.1*ncols, 1)*(frames.shape[2]-1)+2,
+               nrows*frames.shape[1]+max(0.1*nrows, 1)*(frames.shape[1]-1)+2)
 
     fig, axes = plt.subplots(nrows, ncols, figsize=figsize, dpi=1)
-    print(axes.shape, figsize)
-    return show_frame_m(frame, fig, axes)
+    return fig, axes
+
+
+def show_frame_filter(frames, tr=False, file=None):
+    fig, axes = show_frame_filter_env(frames, tr=tr, file=file)
+    return show_frame_m(frames, fig, axes, file=file)
 
 
 def plot_vel(frame, ax):
@@ -99,21 +102,21 @@ def plot_vor(frame, ax):
     ax.imshow(frame, cmap=cmap, vmin=-0.1, vmax=0.1)
 
 
-def show_frame_uvo(frames):
+def show_frame_uvo(frames, file=None):
     fig, axes = plt.subplots(nrows=1, ncols=3)
     data = list(map(lambda f, d: lambda ax: f(d, ax), (plot_vel, plot_vel, plot_vor), frames))
-    return show_frame_m(data, fig, axes)
+    return show_frame_m(data, fig, axes, file=file)
 
 
-def show_frame(frame, exf=None):
+def show_frame(frame, exf=None, file=None):
     if frame.ndim == 2:
-        return show_frame_vor(frame)
+        return show_frame_vor(frame, file=file)
     elif frame.ndim == 3:
         if exf:
             data = [*frame, exf(frame)]
-            return show_frame_uvo(data)
+            return show_frame_uvo(data, file=file)
         else:
-            return show_frame_filter(frame)
+            return show_frame_filter(frame, file=file)
 
 
 ################################################################################

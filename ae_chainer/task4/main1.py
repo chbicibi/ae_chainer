@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as plc
 
 import chainer
+import chainer.distributions as D
 import chainer.functions as F
 from chainer.iterators import SerialIterator
 
@@ -34,17 +35,17 @@ SRC_FILENAME = os.path.splitext(SRC_FILE)[0]
 ################################################################################
 
 def process3(keys, modelname, out):
-    ''' モデル読み出し+可視化 '''
+    ''' 中間層の出力の可視化 '''
 
     file = ms.check_snapshot(out)
-    N = 20
+    N = 100
 
     # 学習データ作成
     # train_data_00 = D_.MapChain(ms.crop_center_sq, ms.get_it(10)('wing_00'))
-    # train_data_10 = D_.MapChain(ms.crop_center_sq, ms.get_it(20)('wing_10'))
+    train_data_10 = D_.MapChain(ms.crop_center_sq, ms.get_it(N)('wing_10'))
     # train_data_20 = D_.MapChain(ms.crop_center_sq, ms.get_it(N)('wing_20'))
-    train_data_30 = D_.MapChain(ms.crop_center_sq, ms.get_it(N)('wing_30'))
-    train_data = train_data_30
+    # train_data_30 = D_.MapChain(ms.crop_center_sq, ms.get_it(N)('wing_30'))
+    train_data = train_data_10
 
     # モデル読み込み
     sample = train_data[:1]
@@ -52,85 +53,67 @@ def process3(keys, modelname, out):
     chainer.serializers.load_npz(file, model, path='updater/model:main/')
     model.to_cpu()
 
+    # 入力の渦度を可視化
     if False:
         V_.show_frame(ms.vorticity(train_data[0]))
         return
 
     # エンコード
-    def enc(x, n=None):
-        z = chainer.Variable(model.xp.asarray(x))
-        for i, chain in enumerate(model.predictor):
-            if i == n:
-                break
-            z = chain.encode(z)
-        return z
+    def enc(x, n=None, file=None):
+        with chainer.using_config('train', False), chainer.no_backprop_mode():
+            h = chainer.Variable(model.xp.asarray(x))
+            for i, chain in enumerate(model.predictor):
+                h = chain.encode(h)
+                if n is None and not isinstance(h, D.Normal) and h.ndim == 4:
+                    V_.show_frame(h.array[0], file=file)
+                if i == n:
+                    break
+            return h
+
+    def dec(h, n=None, file=None):
+        with chainer.using_config('train', False), chainer.no_backprop_mode():
+            if isinstance(h, D.Normal):
+                h = h.mean
+            for i, chain in enumerate(reversed(model.predictor)):
+                h = chain.decode(h)
+                if n is None and h.ndim == 4:
+                    V_.show_frame(h.array[0], file=file)
+                if i == n:
+                    break
+            return h
 
     x = train_data[:1]
-    V_.show_frame(x[0], exf=ms.vorticity)
-    return
+    xa = chainer.Variable(model.xp.asarray(x))
 
-    z = enc(x, 0)
-    V_.show_frame(z.array[0])
-    return
+    if False:
+        h = enc(x, 0)
+        V_.show_frame(h.array[0], file=0.01)
+        return
 
-    # データセット
-    X_00 = train_data_00[10:11]
-    X_10 = train_data_10[15:16]
-    X_20 = train_data_20[30:31]
-    X_30 = train_data_30[0:1]
-    X = X_10, X_30
-    with chainer.using_config('train', False), chainer.no_backprop_mode():
-        Z = [model.predictor.encode(model.xp.asarray(x), inference=True)
-             for x in X]
+    if True:
+        fig0, axes0 = plt.subplots(nrows=1, ncols=3)
 
-    def print_z(z):
-        print(*(f'{s:.3f}' for s in z.array.flatten()))
-        return z
+        hbatch = enc(train_data, 3)
+        fig1, axes1 = V_.show_frame_filter_env(hbatch[0])
 
-    fig, ax = plt.subplots()
-    def plot_z(z=None, l=[]):
-        if z is None:
-            ax.plot(np.array(l))
-            fig.savefig(f'z_log_man_{modelname}.png')
-            return
-        ax.cla()
-        l.append(z.array.flatten())
-        ax.plot(np.array(l))
-        return z
+        for x, y in zip(train_data, hbatch):
+            # [ax.cla() for ax in axes0.flatten()]
+            # [ax.cla() for ax in axes1.flatten()]
+            x_data = list(map(lambda f, d: lambda ax: f(d, ax), (V_.plot_vel, V_.plot_vel, V_.plot_vor), [*x, ms.vorticity(x)]))
+            V_.show_frame_m(x_data, fig0, axes0, file=0.01)
+            V_.show_frame_m(y.array, fig1, axes1, file=0.01)
 
-    for z in Z:
-        print_z(z)
+        plt.show()
+        return
 
-    # モデル適用
-    def apply_model(z):
-        y = model.predictor.decode(z, inference=True)
-        if isinstance(model, NV_.VAELoss):
-            y = F.sigmoid(y)
-        return y
+    if True:
+        V_.show_frame(x[0], exf=ms.vorticity, file=f'filter_i.png')
+        V_.show_frame(z.array[0], exf=ms.vorticity, file=f'filter_o.png')
+        return
 
-    it_z = (Z[0]*(1-i)+Z[1]*i for i in np.arange(0, 1, 0.01))
-    it_zp = map(plot_z, it_z)
-    it_decode = map(apply_model, it_zp)
-
-    colors = [(0, 'red'), (0.5, 'black'), (1, 'green')]
-    cmap = plc.LinearSegmentedColormap.from_list('custom_cmap', colors)
-    def plot_vor(frame):
-        vor = vorticity(frame)
-        def f_(ax):
-            ax.imshow(vor, cmap=cmap, vmin=-0.07, vmax=0.07)
-        return f_
-
-    # 結果データ取得
-    it_result = map(lambda v: v.array[0], it_decode)
-    it_add_vor = map(lambda v: (*v, vorticity(v)), it_result)
-
-    # # 入力データと復号データを合成
-    it_zip = zip(loop(X[0][0]), loop(X[1][0]), it_result)
-    it_zip_with_vor = map(lambda vs: [(*v, plot_vor(v)) for v in vs], it_zip)
-
-    with chainer.using_config('train', False), chainer.no_backprop_mode():
-        V_.show_chainer_NrNc(it_zip_with_vor, nrows=3, ncols=3, direction='tb')
-    plot_z()
+    for fn in range(1, 4):
+        z = enc(x, fn+1)
+        V_.show_frame(z.array[0], file=f'filter_{fn}.png')
 
 
 def task3(*args, **kwargs):
@@ -152,15 +135,139 @@ def task3(*args, **kwargs):
 
 ################################################################################
 
+def process4(keys, modelname, out):
+    ''' モデル読み出し+可視化 '''
+
+    file = ms.check_snapshot(out)
+    N = 30
+
+    # 学習データ作成
+    # train_data_00 = D_.MapChain(ms.crop_center_sq, ms.get_it(10)('wing_00'))
+    train_data_10 = D_.MapChain(ms.crop_center_sq, ms.get_it(N)('wing_10'))
+    # train_data_20 = D_.MapChain(ms.crop_center_sq, ms.get_it(N)('wing_20'))
+    train_data_30 = D_.MapChain(ms.crop_center_sq, ms.get_it(N)('wing_30'))
+    train_data = train_data_10
+
+    # モデル読み込み
+    sample = train_data[:1]
+    model = M_.get_model(modelname, sample=sample)
+    chainer.serializers.load_npz(file, model, path='updater/model:main/')
+    model.to_cpu()
+
+    if False:
+        V_.show_frame(ms.vorticity(train_data[0]))
+        return
+
+    def apply(x):
+        with chainer.using_config('train', False), chainer.no_backprop_mode():
+            y = model.predictor(x)
+            y = F.sigmoid(y)
+            return y
+
+    # エンコード
+    def enc(x, n=None):
+        with chainer.using_config('train', False), chainer.no_backprop_mode():
+            z = model.predictor.encode(x)
+            if isinstance(z, D.Normal):
+                z = z.mean
+            return z
+
+    def dec(z, n=None):
+        with chainer.using_config('train', False), chainer.no_backprop_mode():
+            y = model.predictor.decode(z)
+            y = F.sigmoid(y)
+            return y
+
+    x0 = model.xp.asarray(train_data_10[:1])
+    x1 = model.xp.asarray(train_data_10[15:16])
+    # x1 = model.xp.asarray(train_data_30[15:16])
+
+    z0 = enc(x0)
+    z1 = enc(x1)
+
+    if False:
+        V_.show_frame(x0[0], exf=ms.vorticity, file=f'src_x0.png')
+        V_.show_frame(x1[0], exf=ms.vorticity, file=f'src_x1.png')
+        return
+
+    # for i in (-5, *range(0, 11), 15):
+    for i in (-10, 20):
+        t = i / 10
+        print(t)
+        z = (1 - t) * z0 + t * z1
+        y = dec(z)
+        V_.show_frame(y.array[0], exf=ms.vorticity, file=f'recon_t={t:.1f}.png')
+    return
+
+    xa = chainer.Variable(model.xp.asarray(x))
+
+    if True:
+        z = dec(x)
+        z = F.sigmoid(z)
+
+    print(z.shape)
+    print(F.mean_squared_error(xa, z))
+
+    if True:
+        V_.show_frame(x[0], exf=ms.vorticity, file=f'filter_i.png')
+        V_.show_frame(z.array[0], exf=ms.vorticity, file=f'filter_o.png')
+        return
+
+    for fn in range(1, 4):
+        z = enc(x, fn+1)
+        V_.show_frame(z.array[0], file=f'filter_{fn}.png')
+
+
+def task4(*args, **kwargs):
+    ''' task2: VAEのz入力から復元の可視化 '''
+
+    print(sys._getframe().f_code.co_name)
+
+    # keys = 'plate_10', 'wing_00', 'plate_20', 'wing_15', 'plate_30', 'wing_05'
+    keys = 'wing_00',
+    name = kwargs.get('case', 'case4_0')
+    out = f'__result__/{name}'
+
+    if kwargs.get('check_snapshot'):
+        check_snapshot(out, show=True)
+        return
+
+    process4(keys, name, out)
+
+
+################################################################################
+
 def __test__():
+    fig, ax = plt.subplots()
+    for d in ['top', 'right']:
+        ax.spines[d].set_visible(False)
+
     with ut.chdir(f'{SRC_DIR}/__result__/case4_2'):
         path = ut.select_file('.', key=r'res_.*')
         with ut.chdir(path):
             log = ut.load('log.json', from_json=True)
-            loss = [l['main/loss'] for l in log]
-            plt.ylim((180000, 210000))
-            plt.plot(np.array(loss))
-            plt.show()
+            loss_t = [l['main/loss'] for l in log]
+            loss_v = [l['val/main/loss'] for l in log]
+            # ax.plot(np.array(loss_t), label='training error')
+            # ax.plot(np.array(loss_v), label='validation error')
+            # ax.set_ylim((0, 0.05))
+
+            # loss_t = [l['main/kl_penalty'] for l in log]
+            # loss_v = [l['val/main/kl_penalty'] for l in log]
+            # ax.set_ylim((0, 1000))
+            # ax.plot(np.array(loss_t), label='training $D_{KL}$')
+            # ax.plot(np.array(loss_v), label='validation $D_{KL}$')
+
+            loss_t = [-l['main/reconstr'] for l in log]
+            loss_v = [-l['val/main/reconstr'] for l in log]
+            ax.set_ylim((180000, 200000))
+            ax.plot(np.array(loss_t), label='training loss')
+            ax.plot(np.array(loss_v), label='validation loss')
+
+            fig.legend()
+
+    fig.savefig('error.png')
+            # plt.show()
 
 
 def get_args():
