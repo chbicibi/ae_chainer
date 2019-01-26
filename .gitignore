@@ -1,5 +1,8 @@
 *.sh
 *.ini
+*.mp4
+*.png
+__*__
 __*__/
 config/
 data/
