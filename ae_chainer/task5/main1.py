@@ -144,11 +144,12 @@ def process4(keys, modelname, out):
     N = 30
 
     # 学習データ作成
-    train_data_p10 = D_.MapChain(ms.crop_front_sq, ms.get_it(N)('plate_10'))
+    # train_data_p10 = D_.MapChain(ms.crop_front_sq, ms.get_it(N)('plate_10'))
     # train_data_00 = D_.MapChain(ms.crop_center_sq, ms.get_it(10)('wing_00'))
     train_data_10 = D_.MapChain(ms.crop_front_sq, ms.get_it(N)('wing_10'))
-    # train_data_20 = D_.MapChain(ms.crop_center_sq, ms.get_it(N)('wing_20'))
+    train_data_20 = D_.MapChain(ms.crop_front_sq, ms.get_it(N)('wing_20'))
     train_data_30 = D_.MapChain(ms.crop_front_sq, ms.get_it(N)('wing_30'))
+    # train_data_30c = D_.MapChain(ms.crop_center_sq, ms.get_it(N)('wing_30'))
     train_data = train_data_10
 
     # モデル読み込み
@@ -161,10 +162,29 @@ def process4(keys, modelname, out):
         V_.show_frame(ms.vorticity(train_data[0]))
         return
 
+    def make_plot_z():
+        fig, ax = plt.subplots()
+        l = []
+        def plot_z(z=None):
+            if z is None:
+                if not l:
+                    return
+                p = ax.plot(np.array(l))
+                print(len(p))
+                fig.legend(p, list(map(str, range(64))))
+                fig.savefig(f'z_test.png')
+                return
+            ax.cla()
+            l.append(z.array.flatten())
+            ax.plot(np.array(l))
+            return z
+        return fig, ax, plot_z
+
     def apply(x):
         with chainer.using_config('train', False), chainer.no_backprop_mode():
             y = model.predictor(x)
-            y = F.sigmoid(y)
+            if isinstance(model, NV_.VAELoss):
+                y = F.sigmoid(y)
             return y
 
     # エンコード
@@ -178,33 +198,59 @@ def process4(keys, modelname, out):
     def dec(z, n=None):
         with chainer.using_config('train', False), chainer.no_backprop_mode():
             y = model.predictor.decode(z)
-            y = F.sigmoid(y)
+            if isinstance(model, NV_.VAELoss):
+                y = F.sigmoid(y)
             return y
 
     x0 = model.xp.asarray(train_data_10[:1])
-    # x1 = model.xp.asarray(train_data_10[15:16])
-    x1 = model.xp.asarray(train_data_30[15:16])
+    x1 = model.xp.asarray(train_data_10[15:16]) # 移動
+    x2 = model.xp.asarray(train_data_20[15:16]) # 回転, 拡大
+    x3 = model.xp.asarray(train_data_30[15:16]) # 回転, 拡大
+    # x2c = model.xp.asarray(train_data_30c[15:16]) # 回転, 拡大, 移動
     # x1 = model.xp.asarray(train_data_p10[:1])
 
     z0 = enc(x0)
     z1 = enc(x1)
+    z2 = enc(x2)
+    z3 = enc(x3)
 
     if True:
         V_.show_frame(x0[0], exf=ms.vorticity, file=f'src_x0.png')
-        V_.show_frame(x1[0], exf=ms.vorticity, file=f'src_x1.png')
+        V_.show_frame(x3[0], exf=ms.vorticity, file=f'src_x1.png')
         # return
+
+    fig, ax, plot_z = make_plot_z()
+    # plot_z(z0)
+    # plot_z(z2)
+    # plot_z(z3)
+    # plot_z(z2*2-z0)
+    # plot_z(z3-z2*2+z0)
+    # # plot_z(z3-z2+z1)
+    # plot_z()
+    # return
 
     for i in range(0, 21):
     # for i in (-10, 20):
         t = i / 20
         print(t)
-        z = (1 - t) * z0 + t * z1
+        # z = (1 - t) * z0 + t * z1 # 渦移動
+        # z = (1 - t) * z0 + t * z3 # 翼回転
+        z = 0.5 * (1 - t) * (z0 + z3) + t * z2 # 中間
+        # if i == 41:
+        #     z = z3
+        # else:
+        # z = z0 + (z2c - z2) * t
+        # z.array[0, :48] = 0.0
+        # z = 0 * z0 + np.random.rand(1, 64)
+        plot_z(z)
         y = dec(z)
-        V_.show_frame(y.array[0], exf=ms.vorticity, file=f'recon_t=i_{i:02d}.png')
+        V_.show_frame(y.array[0], exf=ms.vorticity, file=f'recon_r={i:02d}.png')
         # if t < 0:
         #     V_.show_frame(y.array[0], exf=ms.vorticity, file=f'recon_t=n_{1+t:.1f}.png')
         # else:
         #     V_.show_frame(y.array[0], exf=ms.vorticity, file=f'recon_t=p_{t:.1f}.png')
+        plt.pause(0.001)
+    plot_z()
     return
 
     xa = chainer.Variable(model.xp.asarray(x))

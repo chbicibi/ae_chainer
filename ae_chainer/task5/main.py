@@ -65,6 +65,7 @@ def get_extract(key):
         'wing_20': (-1.847, 2.842),
         'wing_30': (-2.192, 3.760),
     }[key]
+    # vmin, vmax = -2.29, 3.80
     return D_.extract_uvf_norm(vmin, vmax)
 
 
@@ -251,9 +252,9 @@ def task0(*args, **kwargs):
 
 def check_snapshot(out, show=False):
     # モデルのパスを取得
-    respath = ut.select_file(out, key=r'res_.*')
+    respath = ut.select_file(out, key=r'res_.*', idx=-1)
     print('path:', respath)
-    file = ut.select_file(respath, key=r'snapshot_.*')
+    file = ut.select_file(respath, key=r'snapshot_.*', idx=-1)
     print('file:', file)
 
     if show:
@@ -300,7 +301,7 @@ def process1(keys, modelname, out):
         # a = np.ones_like(z)
         return z * 0 + a
 
-    # plot z
+    # plot it_zp
     fig, ax = plt.subplots()
     def plot_z(z=None, l=[]):
         if z is None:

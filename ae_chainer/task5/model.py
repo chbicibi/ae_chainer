@@ -420,7 +420,7 @@ def get_model_case7():
         N_.CAEChain(64, 64, batch_norm='re', ksize=5, padding=True),
         N_.CAEChain(64, 128, batch_norm='re', ksize=5, padding=True),
         N_.CAEChain(128, 256, batch_norm='re', ksize=5, padding=True),
-        N_.LAEChain(None, 64), activation=(None, F.relu))
+        N_.LAEChain(None, 64, activation=(None, F.relu)))
 
     loss = L.Classifier(model, lossfun=F.mean_squared_error)
     if C_.DEVICE >= 0:
