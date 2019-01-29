@@ -23,6 +23,7 @@ import dataset as D_
 import net_vae as NV_
 import model as M_
 import vis as V_
+import anim as A_
 import main as ms
 
 
@@ -108,14 +109,15 @@ def process3(keys, modelname, out):
         plt.show()
         return
 
-    if True:
-        V_.show_frame(x[0], exf=ms.vorticity, file=f'filter_i.png')
-        V_.show_frame(z.array[0], exf=ms.vorticity, file=f'filter_o.png')
-        return
+    with ut.chdir('__img__'):
+        if True:
+            V_.show_frame(x[0], exf=ms.vorticity, file=f'filter_i.png')
+            V_.show_frame(z.array[0], exf=ms.vorticity, file=f'filter_o.png')
+            return
 
-    for fn in range(1, 4):
-        z = enc(x, fn+1)
-        V_.show_frame(z.array[0], file=f'filter_{fn}.png')
+        for fn in range(1, 4):
+            z = enc(x, fn+1)
+            V_.show_frame(z.array[0], file=f'filter_{fn}.png')
 
 
 def task3(*args, **kwargs):
@@ -190,16 +192,16 @@ def process4(keys, modelname, out):
     # エンコード
     def enc(x, n=None):
         with chainer.using_config('train', False), chainer.no_backprop_mode():
-            z = model.predictor.encode(x)
+            z = model.encode(x)
             if isinstance(z, D.Normal):
                 z = z.mean
             return z
 
     def dec(z, n=None):
         with chainer.using_config('train', False), chainer.no_backprop_mode():
-            y = model.predictor.decode(z)
-            if isinstance(model, NV_.VAELoss):
-                y = F.sigmoid(y)
+            y = model.decode(z, inference=True)
+            # if isinstance(model, NV_.VAELoss):
+            #     y = F.sigmoid(y)
             return y
 
     x0 = model.xp.asarray(train_data_10[:1])
@@ -214,12 +216,12 @@ def process4(keys, modelname, out):
     z2 = enc(x2)
     z3 = enc(x3)
 
-    with ut.chdir('__img__'):
+    exf = ms.vorticity
 
-        if True:
-            V_.show_frame(x0[0], exf=ms.vorticity, file=f'src_x0.png')
-            V_.show_frame(x3[0], exf=ms.vorticity, file=f'src_x1.png')
-            # return
+    with ut.chdir('__img__'):
+        V_.show_frame(x0[0], exf=exf, file=f'src_x0.png')
+        V_.show_frame(x3[0], exf=exf, file=f'src_x1.png')
+        # return
 
         fig, ax, plot_z = make_plot_z()
         # plot_z(z0)
@@ -246,11 +248,16 @@ def process4(keys, modelname, out):
             # z = 0 * z0 + np.random.rand(1, 64)
             plot_z(z)
             y = dec(z)
-            V_.show_frame(y.array[0], exf=ms.vorticity, file=f'recon_{modelname}={i:02d}.png')
+            # plot_data = y.array[0]
+            plot_data = np.concatenate([x0, y.array, x3])
+            V_.show_frame(plot_data, exf=exf,
+                          file=f'recon_{modelname}_{i:02d}.png')
             # if t < 0:
-            #     V_.show_frame(y.array[0], exf=ms.vorticity, file=f'recon_t=n_{1+t:.1f}.png')
+            #     V_.show_frame(y.array[0], exf=ms.vorticity,
+            # file=f'recon_t=n_{1+t:.1f}.png')
             # else:
-            #     V_.show_frame(y.array[0], exf=ms.vorticity, file=f'recon_t=p_{t:.1f}.png')
+            #     V_.show_frame(y.array[0], exf=ms.vorticity,
+            # file=f'recon_t=p_{t:.1f}.png')
             plt.pause(0.001)
         plot_z()
     return
@@ -274,6 +281,34 @@ def process4(keys, modelname, out):
         V_.show_frame(z.array[0], file=f'filter_{fn}.png')
 
 
+def process4_1(keys, modelname, out):
+    ''' サンプルデータアニメーション '''
+
+    # file = ms.check_snapshot(out)
+    N = 300
+
+    # 学習データ作成
+    # train_data_p10 = D_.MapChain(ms.crop_front_sq, ms.get_it(N)('plate_10'))
+    # train_data_00 = D_.MapChain(ms.crop_center_sq, ms.get_it(10)('wing_00'))
+    # train_data_10 = D_.MapChain(ms.crop_front_sq, ms.get_it(N)('wing_10'))
+    # train_data_20 = D_.MapChain(ms.crop_front_sq, ms.get_it(N)('wing_20'))
+    train_data_30 = D_.MapChain(ms.crop_front_sq, ms.get_it(N)('wing_30'))
+    # train_data_30c = D_.MapChain(ms.crop_center_sq, ms.get_it(N)('wing_30'))
+
+    fig, axes = plt.subplots(nrows=1, ncols=train_data_30[0].shape[0]+1)
+    anim = A_.Animation(fig, frames=N)
+
+    def plot_(i):
+        [ax.cla() for ax in axes]
+        frame = train_data_30[i]
+        data = map(lambda f, d: lambda ax: f(d, ax),
+                   (V_.plot_vel, V_.plot_vel, V_.plot_gray, V_.plot_vor),
+                   (*frame, ms.vorticity(frame)))
+        V_.show_frame_m(data, fig, axes, file=False)
+
+    anim(plot_, file='anim.mp4')
+
+
 def task4(*args, **kwargs):
     ''' task2: VAEのz入力から復元の可視化 '''
 
@@ -281,7 +316,7 @@ def task4(*args, **kwargs):
 
     # keys = 'plate_10', 'wing_00', 'plate_20', 'wing_15', 'plate_30', 'wing_05'
     keys = 'wing_00',
-    name = kwargs.get('case', 'case4_0')
+    name = kwargs.get('case', 'case6_4')
     out = f'__result__/{name}'
 
     if kwargs.get('check_snapshot'):
@@ -298,7 +333,7 @@ def __test__():
     for d in ['top', 'right']:
         ax.spines[d].set_visible(False)
 
-    with ut.chdir(f'{SRC_DIR}/__result__/case4_2'):
+    with ut.chdir(f'{SRC_DIR}/__result__/case7_1'):
         path = ut.select_file('.', key=r'res_.*')
         with ut.chdir(path):
             log = ut.load('log.json', from_json=True)
@@ -306,7 +341,7 @@ def __test__():
             loss_v = [l['val/main/loss'] for l in log]
             # ax.plot(np.array(loss_t), label='training error')
             # ax.plot(np.array(loss_v), label='validation error')
-            # ax.set_ylim((0, 0.05))
+            ax.set_ylim((0, 0.05))
 
             # loss_t = [l['main/kl_penalty'] for l in log]
             # loss_v = [l['val/main/kl_penalty'] for l in log]
@@ -314,22 +349,22 @@ def __test__():
             # ax.plot(np.array(loss_t), label='training $D_{KL}$')
             # ax.plot(np.array(loss_v), label='validation $D_{KL}$')
 
-            loss_t = [-l['main/reconstr'] for l in log]
-            loss_v = [-l['val/main/reconstr'] for l in log]
-            ax.set_ylim((180000, 200000))
+            # loss_t = [-l['main/reconstr'] for l in log]
+            # loss_v = [-l['val/main/reconstr'] for l in log]
+            # ax.set_ylim((180000, 200000))
             ax.plot(np.array(loss_t), label='training loss')
             ax.plot(np.array(loss_v), label='validation loss')
 
             fig.legend()
 
-    fig.savefig('error.png')
-            # plt.show()
+    # fig.savefig('error.png')
+    plt.show()
 
 
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('mode', nargs='?', default='',
-                        choices=['', '3', '4', '5'],
+                        choices=['', '3', '4'],
                         help='Number of main procedure')
     parser.add_argument('--case', '-c', default='',
                         help='Training case name')
