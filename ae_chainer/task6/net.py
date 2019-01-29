@@ -219,8 +219,8 @@ class CAEChain(chainer.Chain, AEBase):
         return y
 
     def encode(self, x, **kwargs):
-        if not kwargs.get('inference'):
-            print(f'E{self.name} in:', F.min(x), F.max(x), ' '*10, end='\r')
+        # if not kwargs.get('inference'):
+        #     print(f'E{self.name} in:', F.min(x), F.max(x), ' '*10, end='\r')
 
         h = self.enc(x)
         if self.activation_e:
@@ -241,8 +241,8 @@ class CAEChain(chainer.Chain, AEBase):
         return y
 
     def decode(self, x, **kwargs):
-        if not kwargs.get('inference'):
-            print(f'D{self.name} in:', F.min(x), F.max(x), ' '*10, end='\r')
+        # if not kwargs.get('inference'):
+        #     print(f'D{self.name} in:', F.min(x), F.max(x), ' '*10, end='\r')
 
         if self.use_indices:
             if not x.shape[0] == self.indexes.shape[0]:

@@ -192,16 +192,16 @@ def process4(keys, modelname, out):
     # エンコード
     def enc(x, n=None):
         with chainer.using_config('train', False), chainer.no_backprop_mode():
-            z = model.predictor.encode(x)
+            z = model.encode(x)
             if isinstance(z, D.Normal):
                 z = z.mean
             return z
 
     def dec(z, n=None):
         with chainer.using_config('train', False), chainer.no_backprop_mode():
-            y = model.predictor.decode(z)
-            if isinstance(model, NV_.VAELoss):
-                y = F.sigmoid(y)
+            y = model.decode(z, inference=True)
+            # if isinstance(model, NV_.VAELoss):
+            #     y = F.sigmoid(y)
             return y
 
     x0 = model.xp.asarray(train_data_10[:1])

@@ -393,13 +393,13 @@ def get_model_case6_4():
     # 入出力チャンネル数を指定
     model = N_.CAEList(
         N_.CAEChain(3, 8, activation=(F.relu, None)),
-        N_.CAEChain(8, 16),
-        N_.CAEChain(16, 32),
-        N_.CAEChain(32, 64),
-        N_.CAEChain(64, 64),
-        N_.CAEChain(64, 128),
-        N_.CAEChain(128, 256),
-        NV_.VAEChain(None, 64))
+        N_.CAEChain(8, 16, activation=F.relu),
+        N_.CAEChain(16, 32, activation=F.relu),
+        N_.CAEChain(32, 64, activation=F.relu),
+        N_.CAEChain(64, 64, activation=F.relu),
+        N_.CAEChain(64, 128, activation=F.relu),
+        N_.CAEChain(128, 256, activation=F.relu),
+        NV_.VAEChain(None, 64, activation=F.relu))
 
     loss = NV_.VAELoss(model, beta=1.0, k=1)
     return loss

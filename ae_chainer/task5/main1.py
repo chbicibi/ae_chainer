@@ -214,43 +214,45 @@ def process4(keys, modelname, out):
     z2 = enc(x2)
     z3 = enc(x3)
 
-    if True:
-        V_.show_frame(x0[0], exf=ms.vorticity, file=f'src_x0.png')
-        V_.show_frame(x3[0], exf=ms.vorticity, file=f'src_x1.png')
+    with ut.chdir('__img__'):
+
+        if True:
+            V_.show_frame(x0[0], exf=ms.vorticity, file=f'src_x0.png')
+            V_.show_frame(x3[0], exf=ms.vorticity, file=f'src_x1.png')
+            # return
+
+        fig, ax, plot_z = make_plot_z()
+        # plot_z(z0)
+        # plot_z(z2)
+        # plot_z(z3)
+        # plot_z(z2*2-z0)
+        # plot_z(z3-z2*2+z0)
+        # # plot_z(z3-z2+z1)
+        # plot_z()
         # return
 
-    fig, ax, plot_z = make_plot_z()
-    # plot_z(z0)
-    # plot_z(z2)
-    # plot_z(z3)
-    # plot_z(z2*2-z0)
-    # plot_z(z3-z2*2+z0)
-    # # plot_z(z3-z2+z1)
-    # plot_z()
-    # return
-
-    for i in range(0, 21):
-    # for i in (-10, 20):
-        t = i / 20
-        print(t)
-        # z = (1 - t) * z0 + t * z1 # 渦移動
-        # z = (1 - t) * z0 + t * z3 # 翼回転
-        z = 0.5 * (1 - t) * (z0 + z3) + t * z2 # 中間
-        # if i == 41:
-        #     z = z3
-        # else:
-        # z = z0 + (z2c - z2) * t
-        # z.array[0, :48] = 0.0
-        # z = 0 * z0 + np.random.rand(1, 64)
-        plot_z(z)
-        y = dec(z)
-        V_.show_frame(y.array[0], exf=ms.vorticity, file=f'recon_r={i:02d}.png')
-        # if t < 0:
-        #     V_.show_frame(y.array[0], exf=ms.vorticity, file=f'recon_t=n_{1+t:.1f}.png')
-        # else:
-        #     V_.show_frame(y.array[0], exf=ms.vorticity, file=f'recon_t=p_{t:.1f}.png')
-        plt.pause(0.001)
-    plot_z()
+        for i in range(0, 21):
+        # for i in (-10, 20):
+            t = i / 20
+            print(t)
+            # z = (1 - t) * z0 + t * z1 # 渦移動
+            z = (1 - t) * z0 + t * z3 # 翼回転
+            # z = 0.5 * (1 - t) * (z0 + z3) + t * z2 # 中間
+            # if i == 41:
+            #     z = z3
+            # else:
+            # z = z0 + (z2c - z2) * t
+            # z.array[0, :48] = 0.0
+            # z = 0 * z0 + np.random.rand(1, 64)
+            plot_z(z)
+            y = dec(z)
+            V_.show_frame(y.array[0], exf=ms.vorticity, file=f'recon_{modelname}={i:02d}.png')
+            # if t < 0:
+            #     V_.show_frame(y.array[0], exf=ms.vorticity, file=f'recon_t=n_{1+t:.1f}.png')
+            # else:
+            #     V_.show_frame(y.array[0], exf=ms.vorticity, file=f'recon_t=p_{t:.1f}.png')
+            plt.pause(0.001)
+        plot_z()
     return
 
     xa = chainer.Variable(model.xp.asarray(x))
