@@ -9,6 +9,8 @@ from chainer import reporter
 import net as N_
 
 
+################################################################################
+
 class VAELoss(chainer.Chain, N_.AEBase):
 
     def __init__(self, predictor, beta=1.0, k=1):
@@ -52,6 +54,8 @@ class VAELoss(chainer.Chain, N_.AEBase):
 
     def decode(self, x, **kwargs):
         y = self.predictor.decode(x, **kwargs)
+        if kwargs.get('inference'):
+            return F.sigmoid(y)
         p_x = D.Bernoulli(logit=y)
         return p_x
 
@@ -61,6 +65,11 @@ class VAELoss(chainer.Chain, N_.AEBase):
 
     def batch_mean(self, v):
         return F.mean(F.sum(v, axis=tuple(range(1, v.ndim))))
+
+    def predict(self, x, **kwargs):
+        xa = self.predictor.xp.asarray(x)
+        with chainer.using_config('train', False), chainer.no_backprop_mode():
+            return F.sigmoid(self.predictor(xa, inference=True, **kwargs))
 
     @property
     def link(self):
@@ -73,7 +82,7 @@ class VAEChain(chainer.Chain, N_.AEBase):
     ''' 単層エンコーダ+デコーダ(VAE全結合ネットワーク)
     '''
 
-    def __init__(self, in_size, out_size, activation=F.relu):
+    def __init__(self, in_size, out_size, activation=F.sigmoid):
         super().__init__()
         self.in_size = in_size
         self.out_size = out_size
@@ -83,7 +92,7 @@ class VAEChain(chainer.Chain, N_.AEBase):
 
         if type(activation) is tuple:
             self.activation_e = None
-            self.activation_d = activation[0]
+            self.activation_d = activation[1]
         else:
             self.activation_e = None
             self.activation_d = activation

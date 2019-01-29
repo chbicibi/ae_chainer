@@ -109,14 +109,15 @@ def process3(keys, modelname, out):
         plt.show()
         return
 
-    if True:
-        V_.show_frame(x[0], exf=ms.vorticity, file=f'filter_i.png')
-        V_.show_frame(z.array[0], exf=ms.vorticity, file=f'filter_o.png')
-        return
+    with ut.chdir('__img__'):
+        if True:
+            V_.show_frame(x[0], exf=ms.vorticity, file=f'filter_i.png')
+            V_.show_frame(z.array[0], exf=ms.vorticity, file=f'filter_o.png')
+            return
 
-    for fn in range(1, 4):
-        z = enc(x, fn+1)
-        V_.show_frame(z.array[0], file=f'filter_{fn}.png')
+        for fn in range(1, 4):
+            z = enc(x, fn+1)
+            V_.show_frame(z.array[0], file=f'filter_{fn}.png')
 
 
 def task3(*args, **kwargs):
@@ -215,43 +216,50 @@ def process4(keys, modelname, out):
     z2 = enc(x2)
     z3 = enc(x3)
 
-    if True:
-        V_.show_frame(x0[0], exf=ms.vorticity, file=f'src_x0.png')
-        V_.show_frame(x3[0], exf=ms.vorticity, file=f'src_x1.png')
+    exf = ms.vorticity
+
+    with ut.chdir('__img__'):
+        V_.show_frame(x0[0], exf=exf, file=f'src_x0.png')
+        V_.show_frame(x3[0], exf=exf, file=f'src_x1.png')
         # return
 
-    fig, ax, plot_z = make_plot_z()
-    # plot_z(z0)
-    # plot_z(z2)
-    # plot_z(z3)
-    # plot_z(z2*2-z0)
-    # plot_z(z3-z2*2+z0)
-    # # plot_z(z3-z2+z1)
-    # plot_z()
-    # return
+        fig, ax, plot_z = make_plot_z()
+        # plot_z(z0)
+        # plot_z(z2)
+        # plot_z(z3)
+        # plot_z(z2*2-z0)
+        # plot_z(z3-z2*2+z0)
+        # # plot_z(z3-z2+z1)
+        # plot_z()
+        # return
 
-    for i in range(0, 21):
-    # for i in (-10, 20):
-        t = i / 20
-        print(t)
-        # z = (1 - t) * z0 + t * z1 # 渦移動
-        z = (1 - t) * z0 + t * z3 # 翼回転
-        # z = 0.5 * (1 - t) * (z0 + z3) + t * z2 # 中間
-        # if i == 41:
-        #     z = z3
-        # else:
-        # z = z0 + (z2c - z2) * t
-        # z.array[0, :48] = 0.0
-        # z = 0 * z0 + np.random.rand(1, 64)
-        plot_z(z)
-        y = dec(z)
-        V_.show_frame(y.array[0], exf=ms.vorticity, file=f'recon_r={i:02d}.png')
-        # if t < 0:
-        #     V_.show_frame(y.array[0], exf=ms.vorticity, file=f'recon_t=n_{1+t:.1f}.png')
-        # else:
-        #     V_.show_frame(y.array[0], exf=ms.vorticity, file=f'recon_t=p_{t:.1f}.png')
-        plt.pause(0.001)
-    plot_z()
+        for i in range(0, 21):
+        # for i in (-10, 20):
+            t = i / 20
+            print(t)
+            # z = (1 - t) * z0 + t * z1 # 渦移動
+            z = (1 - t) * z0 + t * z3 # 翼回転
+            # z = 0.5 * (1 - t) * (z0 + z3) + t * z2 # 中間
+            # if i == 41:
+            #     z = z3
+            # else:
+            # z = z0 + (z2c - z2) * t
+            # z.array[0, :48] = 0.0
+            # z = 0 * z0 + np.random.rand(1, 64)
+            plot_z(z)
+            y = dec(z)
+            # plot_data = y.array[0]
+            plot_data = np.concatenate([x0, y.array, x3])
+            V_.show_frame(plot_data, exf=exf,
+                          file=f'recon_{modelname}_{i:02d}.png')
+            # if t < 0:
+            #     V_.show_frame(y.array[0], exf=ms.vorticity,
+            # file=f'recon_t=n_{1+t:.1f}.png')
+            # else:
+            #     V_.show_frame(y.array[0], exf=ms.vorticity,
+            # file=f'recon_t=p_{t:.1f}.png')
+            plt.pause(0.001)
+        plot_z()
     return
 
     xa = chainer.Variable(model.xp.asarray(x))
@@ -308,7 +316,7 @@ def task4(*args, **kwargs):
 
     # keys = 'plate_10', 'wing_00', 'plate_20', 'wing_15', 'plate_30', 'wing_05'
     keys = 'wing_00',
-    name = kwargs.get('case', 'case4_0')
+    name = kwargs.get('case', 'case6_4')
     out = f'__result__/{name}'
 
     if kwargs.get('check_snapshot'):
@@ -325,7 +333,7 @@ def __test__():
     for d in ['top', 'right']:
         ax.spines[d].set_visible(False)
 
-    with ut.chdir(f'{SRC_DIR}/__result__/case4_2'):
+    with ut.chdir(f'{SRC_DIR}/__result__/case7_1'):
         path = ut.select_file('.', key=r'res_.*')
         with ut.chdir(path):
             log = ut.load('log.json', from_json=True)
@@ -333,7 +341,7 @@ def __test__():
             loss_v = [l['val/main/loss'] for l in log]
             # ax.plot(np.array(loss_t), label='training error')
             # ax.plot(np.array(loss_v), label='validation error')
-            # ax.set_ylim((0, 0.05))
+            ax.set_ylim((0, 0.05))
 
             # loss_t = [l['main/kl_penalty'] for l in log]
             # loss_v = [l['val/main/kl_penalty'] for l in log]
@@ -341,22 +349,22 @@ def __test__():
             # ax.plot(np.array(loss_t), label='training $D_{KL}$')
             # ax.plot(np.array(loss_v), label='validation $D_{KL}$')
 
-            loss_t = [-l['main/reconstr'] for l in log]
-            loss_v = [-l['val/main/reconstr'] for l in log]
-            ax.set_ylim((180000, 200000))
+            # loss_t = [-l['main/reconstr'] for l in log]
+            # loss_v = [-l['val/main/reconstr'] for l in log]
+            # ax.set_ylim((180000, 200000))
             ax.plot(np.array(loss_t), label='training loss')
             ax.plot(np.array(loss_v), label='validation loss')
 
             fig.legend()
 
-    fig.savefig('error.png')
-            # plt.show()
+    # fig.savefig('error.png')
+    plt.show()
 
 
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('mode', nargs='?', default='',
-                        choices=['', '3', '4', '5'],
+                        choices=['', '3', '4'],
                         help='Number of main procedure')
     parser.add_argument('--case', '-c', default='',
                         help='Training case name')

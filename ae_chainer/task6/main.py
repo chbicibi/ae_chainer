@@ -80,6 +80,12 @@ def get_it(size):
                                        cache_path=cache_path)
         a = train_data[2000-size:2000]
         return a
+
+    src = '..\\__cache__'
+    dst = '__cache__'
+    if not os.path.isdir(dst) and os.path.isdir(src):
+        print('symlink:', src, '<<===>>', dst)
+        os.symlink(src, dst)
     return g_
 
 
@@ -162,6 +168,10 @@ class TrainDataset(chainer.dataset.DatasetMixin):
     def get_example(self, i):
         a = self.it[i]
         return a, a
+
+
+def velocity(frame):
+    return np.linalg.norm(frame[:2], axis=0)
 
 
 def vorticity0(frame):

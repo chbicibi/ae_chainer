@@ -427,6 +427,45 @@ def get_model_case7():
     return loss
 
 
+def get_model_case7_1():
+    ''' AE
+    '''
+
+    # 入出力チャンネル数を指定
+    model = N_.CAEList(
+        N_.CAEChain(3, 8, activation=(F.sigmoid, None)),
+        N_.CAEChain(8, 16, activation=F.sigmoid),
+        N_.CAEChain(16, 32, activation=F.sigmoid),
+        N_.CAEChain(32, 64, activation=F.sigmoid),
+        N_.CAEChain(64, 64, activation=F.sigmoid),
+        N_.CAEChain(64, 128, activation=F.sigmoid),
+        N_.CAEChain(128, 256, activation=F.sigmoid),
+        N_.LAEChain(None, 64, activation=(None, F.sigmoid)))
+
+    loss = N_.AELoss(model)
+    return loss
+
+
+def get_model_case8_0():
+    ''' VAE
+    activation: F.relu => F.sigmoid
+    '''
+
+    # 入出力チャンネル数を指定
+    model = N_.CAEList(
+        N_.CAEChain(3, 8, activation=(F.sigmoid, None)),
+        N_.CAEChain(8, 16, activation=F.sigmoid),
+        N_.CAEChain(16, 32, activation=F.sigmoid),
+        N_.CAEChain(32, 64, activation=F.sigmoid),
+        N_.CAEChain(64, 64, activation=F.sigmoid),
+        N_.CAEChain(64, 128, activation=F.sigmoid),
+        N_.CAEChain(128, 256, activation=F.sigmoid),
+        NV_.VAEChain(None, 64, activation=(None, F.sigmoid)))
+
+    loss = NV_.VAELoss(model, beta=1.0, k=1)
+    return loss
+
+
 def get_model(name, sample=None):
     # 関数名自動取得に変更
     # if name == 'case0':

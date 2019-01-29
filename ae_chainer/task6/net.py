@@ -38,11 +38,49 @@ class AEBase(object):
             self.to_cpu()
 
 
+################################################################################
+# 損失計算
+################################################################################
+
+class AELoss(L.Classifier, AEBase):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, lossfun=F.mean_squared_error, **kwargs)
+        # self.lossfun = lossfun
+        # with self.init_scope():
+        #     self.predictor = predictor
+
+        self.compute_accuracy = False
+        self.adjust()
+
+    def __call__(self, x, x_=None, **kwargs):
+        if x_ is None:
+            x_ = x
+
+        return self.forward(x, x_)
+        # loss = self.lossfun(self.predictor(x), x_)
+        # reporter.report({'loss': loss}, self)
+        # return loss
+
+    def encode(self, x, **kwargs):
+        return self.predictor.encode(x, **kwargs)
+
+    def decode(self, x, **kwargs):
+        return self.predictor.decode(x, **kwargs)
+
+    def predict(self, x, **kwargs):
+        xa = self.predictor.xp.asarray(x)
+        with chainer.using_config('train', False), chainer.no_backprop_mode():
+            return self.predictor(xa, inference=True, **kwargs)
+
+
+################################################################################
+
 class LAEChain(chainer.Chain, AEBase):
     ''' 単層エンコーダ+デコーダ(全結合ネットワーク)
     '''
 
-    def __init__(self, in_size, out_size, activation=F.relu, batch_norm=True,
+    def __init__(self, in_size, out_size, activation=F.sigmoid, batch_norm=True,
                  **kwargs):
         super().__init__()
         self.in_size = in_size
@@ -145,7 +183,7 @@ class CAEChain(chainer.Chain, AEBase):
     '''
 
     def __init__(self, in_channels, out_channels, ksize=5, padding=True,
-                 activation=F.relu, use_indices=False, batch_norm=True, **kwargs):
+                 activation=F.sigmoid, use_indices=False, batch_norm=True, **kwargs):
         super().__init__()
         # ksize = kwargs.get('ksize', 3)
         pad = ksize // 2 if padding else 0
@@ -181,7 +219,9 @@ class CAEChain(chainer.Chain, AEBase):
         return y
 
     def encode(self, x, **kwargs):
-        print(f'E{self.name} in:', F.min(x), F.max(x), ' '*10, end='\r')
+        if not kwargs.get('inference'):
+            print(f'E{self.name} in:', F.min(x), F.max(x), ' '*10, end='\r')
+
         h = self.enc(x)
         if self.activation_e:
             if self.batch_norm:
@@ -201,7 +241,9 @@ class CAEChain(chainer.Chain, AEBase):
         return y
 
     def decode(self, x, **kwargs):
-        print(f'D{self.name} in:', F.min(x), F.max(x), ' '*10, end='\r')
+        if not kwargs.get('inference'):
+            print(f'D{self.name} in:', F.min(x), F.max(x), ' '*10, end='\r')
+
         if self.use_indices:
             if not x.shape[0] == self.indexes.shape[0]:
                 self.indexes = self.xp.repeat(self.indexes,
@@ -220,11 +262,7 @@ class CAEChain(chainer.Chain, AEBase):
         # print('decode out:', y.shape)
         if kwargs.get('show_shape'):
             print(f'layer(D{self.name}): in: {x.shape} out: {y.shape}')
-
-        if kwargs.get('inference') and self.name == '0':
-            return F.sigmoid(y)
-        else:
-            return y
+        return y
 
 
 class CAEList(chainer.ChainList, AEBase):

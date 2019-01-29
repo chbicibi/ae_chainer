@@ -93,9 +93,14 @@ def show_frame_filter(frames, tr=False, file=None):
 
 
 def plot_gray(frame, ax):
-    # colors = [(0, '#ff0000'), (0.5, '#000000'), (1, '#0000ff')]
-    # cmap = plc.LinearSegmentedColormap.from_list('custom_cmap', colors)
     ax.imshow(frame, cmap='gray')
+
+
+def plot_red(frame, ax):
+    print(np.min(frame), np.max(frame))
+    colors = [(0, '#ffffff'), (0.5, '#ffffff'), (1, '#ff0000')]
+    cmap = plc.LinearSegmentedColormap.from_list('custom_cmap', colors)
+    ax.imshow(frame, cmap=cmap, vmin=0, vmax=1)
 
 
 def plot_vel(frame, ax):
@@ -106,6 +111,7 @@ def plot_vel(frame, ax):
 
 def plot_vor(frame, ax):
     colors = [(0, '#000000'), (0.3, '#ff0000'), (0.5, '#ffffff'), (0.7, '#00ff00'), (1, '#000000')]
+    # colors = [(0, '#ffffff'), (0.3, '#ff0000'), (0.5, '#000000'), (0.7, '#00ff00'), (1, '#ffffff')]
     cmap = plc.LinearSegmentedColormap.from_list('custom_cmap', colors)
     ax.imshow(frame, cmap=cmap, vmin=-0.1, vmax=0.1)
 
@@ -125,6 +131,25 @@ def show_frame_uvfo(frames, file=None):
     plt.close(fig)
 
 
+def show_frame_uvfo_2dim(frames, file=None):
+    # print(frames[0][0].shape) # => (384, 384)
+    nrows = len(frames)
+    ncols = len(frames[0])
+    H = frames[0][0].shape[0]
+    W = frames[0][0].shape[1]
+    figsize = np.array([ncols * W + max(0.05 * W, 1) * (ncols - 1 ),
+                        nrows * H + max(0.05 * H, 1) * (nrows - 1 )]) / 2
+
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=figsize, dpi=1)
+
+    data = chain(*[map(lambda f, d: lambda ax: f(d, ax),
+                       (plot_vel, plot_vel, plot_gray, plot_vor),
+                       f)
+                  for f in frames])
+    show_frame_m(data, fig, axes, file=file)
+    plt.close(fig)
+
+
 def show_frame(frame, exf=None, file=None):
     if frame.ndim == 2:
         return show_frame_vor(frame, file=file)
@@ -134,6 +159,10 @@ def show_frame(frame, exf=None, file=None):
             return show_frame_uvfo(data, file=file)
         else:
             return show_frame_filter(frame, file=file)
+    elif frame.ndim == 4:
+        if exf:
+            data = [[*f, exf(f)] for f in frame]
+            return show_frame_uvfo_2dim(data, file=file)
 
 
 ################################################################################
