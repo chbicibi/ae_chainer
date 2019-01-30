@@ -13,12 +13,7 @@ import matplotlib.colors as plc
 
 import chainer
 import chainer.functions as F
-# import chainer.links as L
-# from chainer.datasets import mnist, cifar, split_dataset_random
-# from chainer.datasets.tuple_dataset import TupleDataset
 from chainer.iterators import SerialIterator
-# from chainer.optimizers import Adam
-# from chainer.training import StandardUpdater, Trainer, extensions
 
 import myutils as ut
 
@@ -95,8 +90,9 @@ def get_task_data(_, modelname, batchsize=1):
     '''
 
     # 学習データ作成
-    keys = 'wing_00', 'wing_10', 'wing_20', 'wing_30'
-    train_data = D_.MapChain(crop_random_sq, *map(get_it(300), keys),
+    keys = ('wing_00', 'wing_10', 'wing_20', 'wing_30',
+            'plate_00', 'plate_10', 'plate_20', 'plate_30')
+    train_data = D_.MapChain(crop_random_sq, *map(get_it(400), keys),
                         name='random_crop')
     train = TrainDataset(train_data)
     train_iter = SerialIterator(train, batchsize)
@@ -121,40 +117,41 @@ def get_task_data(_, modelname, batchsize=1):
 
 def crop_random_sq(frame):
     ''' frame: (C, H, W)
-    (:, 512, 1024) => (:, 382, 382)
+    (:, 512, 1024) => (:, 384, 384)
     random_range = 0:128, 0:640
     '''
     size = 384
     p = [np.random.randint(r - size) for r in frame.shape[1:]]
-    if np.random.rand() < 0.5:
-        s = slice(p[0], p[0]+size, 1)
-    else:
-        s = slice(p[0]+size-1, p[0]-1 if p[0] else None, -1)
-    a = frame[:, s, p[1]:p[1]+size]
-    # print('I:', np.min(a), np.max(a))
-    return a
+    return frame[:, p[0]:p[0]+size, p[1]:p[1]+size]
+    # if np.random.rand() < 0.5:
+    #     s = slice(p[0], p[0]+size, 1)
+    # else:
+    #     s = slice(p[0]+size-1, p[0]-1 if p[0] else None, -1)
+    # a = frame[:, s, p[1]:p[1]+size]
+    # # print('I:', np.min(a), np.max(a))
+    # return a
 
 
 def crop_center_sq(frame):
     ''' frame: (C, H, W)
-    (:, 512, 1024) => (:, 382, 382)
+    (:, 512, 1024) => (:, 384, 384)
     '''
     size = 384
     p = [(r - size) // 2 for r in frame.shape[1:]]
     a = frame[:, p[0]:p[0]+size, p[1]:p[1]+size]
-    # a[2] = a[2] * (1 - 1e-5) + np.random.uniform(0, 1e-5, (382, 382))
+    # a[2] = a[2] * (1 - 1e-5) + np.random.uniform(0, 1e-5, (384, 384))
     return a
 
 
 def crop_front_sq(frame):
     ''' frame: (C, H, W)
-    (:, 512, 1024) => (:, 382, 382)
+    (:, 512, 1024) => (:, 384, 384)
     '''
     size = 384
     p = [(r - size) // 2 for r in frame.shape[1:]]
     p[1] = 128
     a = frame[:, p[0]:p[0]+size, p[1]:p[1]+size]
-    # a[2] = a[2] * (1 - 1e-5) + np.random.uniform(0, 1e-5, (382, 382))
+    # a[2] = a[2] * (1 - 1e-5) + np.random.uniform(0, 1e-5, (384, 384))
     return a
 
 
@@ -177,9 +174,6 @@ def velocity(frame):
 def vorticity0(frame):
     return frame[0, :-2, 1:-1] - frame[0, 2:, 1:-1] \
          - frame[1, 1:-1, :-2] + frame[1, 1:-1, 2:]
-    # [[[0,  1, 0], [[ 0, 0, 0], [[0, 0, 0]
-    #   [0,  0, 0],  [-1, 0, 1],  [0, 0, 0]
-    #   [0, -1, 0]]  [ 0, 0, 0]]  [0, 0, 0]]]
 
 
 def vorticity1(frame):
@@ -624,6 +618,19 @@ def __test__():
     # a = np.arange(8).reshape(2, 2, 2)
     # print(a)
     # print(a.sum(axis=-1))
+
+
+def __test__():
+    reporter = chainer.Reporter()
+    observer = object()
+    reporter.add_observer('my_observer', observer)
+    observation = {}
+    with reporter.scope(observation):
+        reporter.report({'x': 1}, observer)
+        reporter.report({'x': 10}, observer)
+    # reporter.report({'loss': 0}, None)
+    print(observation)
+    print(dir(object))
 
 
 def get_args():

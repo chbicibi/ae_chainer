@@ -78,12 +78,10 @@ def show_frame_filter_env(frames, tr=False, file=None):
     nbatch = frames.shape[0]
     ncols = math.floor(math.sqrt(nbatch))
     nrows = math.ceil(nbatch / ncols)
-    H = frames.shape[1]
-    W = frames.shape[2]
     if tr or ncols < 3:
         nrows, ncols = ncols, nrows
-    figsize = (ncols * W + max(0.1 * W, 1) * (ncols - 1),
-               nrows * H + max(0.1 * H, 1) * (nrows - 1))
+    figsize = (ncols*frames.shape[2]+max(0.1*ncols, 1)*(frames.shape[2]-1)+2,
+               nrows*frames.shape[1]+max(0.1*nrows, 1)*(frames.shape[1]-1)+2)
 
     fig, axes = plt.subplots(nrows, ncols, figsize=figsize, dpi=1)
     return fig, axes

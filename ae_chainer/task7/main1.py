@@ -43,27 +43,16 @@ def process3(keys, modelname, out):
 
     # 学習データ作成
     # train_data_00 = D_.MapChain(ms.crop_center_sq, ms.get_it(10)('wing_00'))
-    # train_data_10 = D_.MapChain(ms.crop_center_sq, ms.get_it(N)('wing_10'))
+    train_data_10 = D_.MapChain(ms.crop_center_sq, ms.get_it(N)('wing_10'))
     # train_data_20 = D_.MapChain(ms.crop_center_sq, ms.get_it(N)('wing_20'))
-    train_data_30 = D_.MapChain(ms.crop_center_sq, ms.get_it(N)('wing_30'))
-    train_data = train_data_30
+    # train_data_30 = D_.MapChain(ms.crop_center_sq, ms.get_it(N)('wing_30'))
+    train_data = train_data_10
 
     # モデル読み込み
     sample = train_data[:1]
     model = M_.get_model(modelname, sample=sample)
     chainer.serializers.load_npz(file, model, path='updater/model:main/')
     model.to_cpu()
-    W = model.predictor[0].enc.W
-    b = model.predictor[0].enc.b
-    W.array[0] = 0
-    W.array[0, 0, 1, 2] = 25.0
-    W.array[0, 0, 3, 2] = -25.0
-    W.array[0, 1, 2, 1] = -25.0
-    W.array[0, 1, 2, 3] = 25.0
-    # W.array[0, 2] = 1.0
-    b.array[0] = -2
-    print(b)
-    # exit()
 
     # 入力の渦度を可視化
     if False:
@@ -103,10 +92,9 @@ def process3(keys, modelname, out):
         return
 
     if True:
-        target_leyer = 0
         fig0, axes0 = plt.subplots(nrows=1, ncols=xa.shape[1]+1)
 
-        hbatch = enc(train_data, target_leyer)
+        hbatch = enc(train_data, 3)
         fig1, axes1 = V_.show_frame_filter_env(hbatch[0])
 
         for x, y in zip(train_data, hbatch):

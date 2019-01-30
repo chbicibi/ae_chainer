@@ -35,123 +35,7 @@ SRC_FILENAME = os.path.splitext(SRC_FILE)[0]
 
 ################################################################################
 
-def process3(keys, modelname, out):
-    ''' 中間層の出力の可視化 '''
-
-    file = ms.check_snapshot(out)
-    N = 100
-
-    # 学習データ作成
-    # train_data_00 = D_.MapChain(ms.crop_center_sq, ms.get_it(10)('wing_00'))
-    # train_data_10 = D_.MapChain(ms.crop_center_sq, ms.get_it(N)('wing_10'))
-    # train_data_20 = D_.MapChain(ms.crop_center_sq, ms.get_it(N)('wing_20'))
-    train_data_30 = D_.MapChain(ms.crop_center_sq, ms.get_it(N)('wing_30'))
-    train_data = train_data_30
-
-    # モデル読み込み
-    sample = train_data[:1]
-    model = M_.get_model(modelname, sample=sample)
-    chainer.serializers.load_npz(file, model, path='updater/model:main/')
-    model.to_cpu()
-    W = model.predictor[0].enc.W
-    b = model.predictor[0].enc.b
-    W.array[0] = 0
-    W.array[0, 0, 1, 2] = 25.0
-    W.array[0, 0, 3, 2] = -25.0
-    W.array[0, 1, 2, 1] = -25.0
-    W.array[0, 1, 2, 3] = 25.0
-    # W.array[0, 2] = 1.0
-    b.array[0] = -2
-    print(b)
-    # exit()
-
-    # 入力の渦度を可視化
-    if False:
-        V_.show_frame(ms.vorticity(train_data[0]))
-        return
-
-    # エンコード
-    def enc(x, n=None, file=None):
-        with chainer.using_config('train', False), chainer.no_backprop_mode():
-            h = chainer.Variable(model.xp.asarray(x))
-            for i, chain in enumerate(model.predictor):
-                h = chain.encode(h)
-                if n is None and not isinstance(h, D.Normal) and h.ndim == 4:
-                    V_.show_frame(h.array[0], file=file)
-                if i == n:
-                    break
-            return h
-
-    def dec(h, n=None, file=None):
-        with chainer.using_config('train', False), chainer.no_backprop_mode():
-            if isinstance(h, D.Normal):
-                h = h.mean
-            for i, chain in enumerate(reversed(model.predictor)):
-                h = chain.decode(h)
-                if n is None and h.ndim == 4:
-                    V_.show_frame(h.array[0], file=file)
-                if i == n:
-                    break
-            return h
-
-    x = train_data[:1]
-    xa = chainer.Variable(model.xp.asarray(x))
-
-    if False:
-        h = enc(x, 0)
-        V_.show_frame(h.array[0], file=0.01)
-        return
-
-    if True:
-        target_leyer = 0
-        fig0, axes0 = plt.subplots(nrows=1, ncols=xa.shape[1]+1)
-
-        hbatch = enc(train_data, target_leyer)
-        fig1, axes1 = V_.show_frame_filter_env(hbatch[0])
-
-        for x, y in zip(train_data, hbatch):
-            # [ax.cla() for ax in axes0.flatten()]
-            # [ax.cla() for ax in axes1.flatten()]
-            x_data = list(map(lambda f, d: lambda ax: f(d, ax),
-                              (V_.plot_vel, V_.plot_vel, V_.plot_gray, V_.plot_vor),
-                              [*x, ms.vorticity(x)]))
-            V_.show_frame_m(x_data, fig0, axes0, file=0.01)
-            V_.show_frame_m(y.array, fig1, axes1, file=0.01)
-
-        plt.show()
-        return
-
-    with ut.chdir('__img__'):
-        if True:
-            V_.show_frame(x[0], exf=ms.vorticity, file=f'filter_i.png')
-            V_.show_frame(z.array[0], exf=ms.vorticity, file=f'filter_o.png')
-            return
-
-        for fn in range(1, 4):
-            z = enc(x, fn+1)
-            V_.show_frame(z.array[0], file=f'filter_{fn}.png')
-
-
-def task3(*args, **kwargs):
-    ''' task2: VAEのz入力から復元の可視化 '''
-
-    print(sys._getframe().f_code.co_name)
-
-    # keys = 'plate_10', 'wing_00', 'plate_20', 'wing_15', 'plate_30', 'wing_05'
-    keys = 'wing_00',
-    name = kwargs.get('case', 'case4_0')
-    out = f'__result__/{name}'
-
-    if kwargs.get('check_snapshot'):
-        check_snapshot(out, show=True)
-        return
-
-    process3(keys, name, out)
-
-
-################################################################################
-
-def process4(keys, modelname, out):
+def process4(casename, out):
     ''' モデル読み出し+可視化 '''
 
     file = ms.check_snapshot(out)
@@ -168,7 +52,7 @@ def process4(keys, modelname, out):
 
     # モデル読み込み
     sample = train_data[:1]
-    model = M_.get_model(modelname, sample=sample)
+    model = M_.get_model(casename, sample=sample)
     chainer.serializers.load_npz(file, model, path='updater/model:main/')
     model.to_cpu()
 
@@ -184,7 +68,6 @@ def process4(keys, modelname, out):
                 if not l:
                     return
                 p = ax.plot(np.array(l))
-                print(len(p))
                 fig.legend(p, list(map(str, range(64))))
                 fig.savefig(f'z_test.png')
                 return
@@ -196,25 +79,15 @@ def process4(keys, modelname, out):
 
     def apply(x):
         with chainer.using_config('train', False), chainer.no_backprop_mode():
-            y = model.predictor(x)
-            if isinstance(model, NV_.VAELoss):
-                y = F.sigmoid(y)
-            return y
+            return model.predict(x, inference=True)
 
-    # エンコード
     def enc(x, n=None):
         with chainer.using_config('train', False), chainer.no_backprop_mode():
-            z = model.encode(x)
-            if isinstance(z, D.Normal):
-                z = z.mean
-            return z
+            return model.encode(x, inference=True)
 
     def dec(z, n=None):
         with chainer.using_config('train', False), chainer.no_backprop_mode():
-            y = model.decode(z, inference=True)
-            # if isinstance(model, NV_.VAELoss):
-            #     y = F.sigmoid(y)
-            return y
+            return model.decode(z, inference=True)
 
     x0 = model.xp.asarray(train_data_10[:1])
     x1 = model.xp.asarray(train_data_10[15:16]) # 移動
@@ -246,9 +119,8 @@ def process4(keys, modelname, out):
         # return
 
         for i in range(0, 21):
-        # for i in (-10, 20):
             t = i / 20
-            print(t)
+            print(f't={t}')
             # z = (1 - t) * z0 + t * z1 # 渦移動
             z = (1 - t) * z0 + t * z3 # 翼回転
             # z = 0.5 * (1 - t) * (z0 + z3) + t * z2 # 中間
@@ -263,7 +135,7 @@ def process4(keys, modelname, out):
             # plot_data = y.array[0]
             plot_data = np.concatenate([x0, y.array, x3])
             V_.show_frame(plot_data, exf=exf,
-                          file=f'recon_{modelname}_{i:02d}.png')
+                          file=f'recon_{casename}_{i:02d}.png')
             # if t < 0:
             #     V_.show_frame(y.array[0], exf=ms.vorticity,
             # file=f'recon_t=n_{1+t:.1f}.png')
@@ -272,28 +144,9 @@ def process4(keys, modelname, out):
             # file=f'recon_t=p_{t:.1f}.png')
             plt.pause(0.001)
         plot_z()
-    return
-
-    xa = chainer.Variable(model.xp.asarray(x))
-
-    if True:
-        z = dec(x)
-        z = F.sigmoid(z)
-
-    print(z.shape)
-    print(F.mean_squared_error(xa, z))
-
-    if True:
-        V_.show_frame(x[0], exf=ms.vorticity, file=f'filter_i.png')
-        V_.show_frame(z.array[0], exf=ms.vorticity, file=f'filter_o.png')
-        return
-
-    for fn in range(1, 4):
-        z = enc(x, fn+1)
-        V_.show_frame(z.array[0], file=f'filter_{fn}.png')
 
 
-def process4_1(keys, modelname, out):
+def process4_1(casename, out):
     ''' サンプルデータアニメーション '''
 
     # file = ms.check_snapshot(out)
@@ -322,61 +175,26 @@ def process4_1(keys, modelname, out):
 
 
 def task4(*args, **kwargs):
-    ''' task2: VAEのz入力から復元の可視化 '''
-
-    print(sys._getframe().f_code.co_name)
-
-    # keys = 'plate_10', 'wing_00', 'plate_20', 'wing_15', 'plate_30', 'wing_05'
-    keys = 'wing_00',
-    name = kwargs.get('case', 'case6_4')
-    out = f'__result__/{name}'
+    casename = kwargs.get('case') or 'case9_0'
+    out = f'__result__/{casename}'
 
     if kwargs.get('check_snapshot'):
         check_snapshot(out, show=True)
         return
 
-    process4(keys, name, out)
+    process4(casename, out)
 
 
 ################################################################################
 
 def __test__():
-    fig, ax = plt.subplots()
-    for d in ['top', 'right']:
-        ax.spines[d].set_visible(False)
-
-    with ut.chdir(f'{SRC_DIR}/__result__/case7_1'):
-        path = ut.select_file('.', key=r'res_.*')
-        with ut.chdir(path):
-            log = ut.load('log.json', from_json=True)
-            loss_t = [l['main/loss'] for l in log]
-            loss_v = [l['val/main/loss'] for l in log]
-            # ax.plot(np.array(loss_t), label='training error')
-            # ax.plot(np.array(loss_v), label='validation error')
-            ax.set_ylim((0, 0.05))
-
-            # loss_t = [l['main/kl_penalty'] for l in log]
-            # loss_v = [l['val/main/kl_penalty'] for l in log]
-            # ax.set_ylim((0, 1000))
-            # ax.plot(np.array(loss_t), label='training $D_{KL}$')
-            # ax.plot(np.array(loss_v), label='validation $D_{KL}$')
-
-            # loss_t = [-l['main/reconstr'] for l in log]
-            # loss_v = [-l['val/main/reconstr'] for l in log]
-            # ax.set_ylim((180000, 200000))
-            ax.plot(np.array(loss_t), label='training loss')
-            ax.plot(np.array(loss_v), label='validation loss')
-
-            fig.legend()
-
-    # fig.savefig('error.png')
-    plt.show()
+    pass
 
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('mode', nargs='?', default='',
-                        choices=['', '3', '4'],
+    parser.add_argument('mode', nargs='?', default='4',
+                        choices=['', '4'],
                         help='Number of main procedure')
     parser.add_argument('--case', '-c', default='',
                         help='Training case name')
@@ -384,8 +202,6 @@ def get_args():
                         help='GPU ID (negative value indicates CPU)')
     parser.add_argument('--out', '-o', default='result',
                         help='Directory to output the result')
-    # parser.add_argument('--clear', '-c', action='store_true',
-    #                     help='Remove directory at the beginning')
     parser.add_argument('--no-progress', '-p', action='store_true',
                         help='Hide progress bar')
 
@@ -416,7 +232,6 @@ def main():
     out = f'result/{SRC_FILENAME}'
 
     if args.test:
-        # print(vars(args))
         __test__()
 
     elif args.mode in '0123456789':
