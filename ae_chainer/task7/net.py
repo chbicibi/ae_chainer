@@ -312,6 +312,63 @@ class CAEChain(chainer.Chain, AEBase):
         self.adjust()
 
 
+class CAEChainM(CAEChain):
+    ''' 単層エンコーダ+デコーダ(畳み込みネットワーク)
+    複数畳み込み層を連結
+    '''
+
+    def __init__(self, *args, ksize=3, n_conv=2, **kwargs):
+        # self.n_conv = kwargs.get('n_conv', 1)
+        self.n_conv = n_conv
+        super().__init__(*args, ksize=ksize, **kwargs)
+
+    def maybe_init(self, in_channels):
+        if self.init:
+            return
+        elif in_channels is None:
+            return
+
+        if DEBUG1:
+            print('maybe_init', in_channels)
+
+        pad = self.ksize // 2 if self.padding else 0
+
+        def mk_enc(i):
+            ch_in = self.out_channels if i else in_channels
+            ch_out = self.out_channels
+            return L.Convolution2D(ch_in, ch_out, ksize=self.ksize, pad=pad)
+
+        def mk_dec(i):
+            ch_in = self.out_channels
+            ch_out = self.out_channels if i else in_channels
+            return L.Deconvolution2D(ch_in, ch_out, ksize=self.ksize, pad=pad)
+
+        enc_s = list(map(mk_enc, range(self.n_conv)))
+        dec_s = list(map(mk_dec, reversed(range(self.n_conv))))
+
+        self.enc = lambda x: reduce(lambda h, f: f(h), enc_s, x)
+        self.dec = lambda x: reduce(lambda h, f: f(h), dec_s, x)
+
+        for i, f in enumerate(enc_s):
+            self.add_link(f'enc{i}', f) # =~ setattr(self, 'enc*', f)
+        for i, f in enumerate(dec_s):
+            self.add_link(f'dec{i}', f) # =~ setattr(self, 'dec*', f)
+
+        with self.init_scope():
+            if self.batch_norm:
+                self.bne = L.BatchRenormalization(self.out_channels)
+                self.bnd = L.BatchRenormalization(in_channels)
+            else:
+                self.bne = None
+                self.bnd = None
+
+        self.in_channels = in_channels
+        self.init = True
+        self.adjust()
+
+
+################################################################################
+
 class CAEList(chainer.ChainList, AEBase):
     ''' 単層エンコーダ+デコーダの直列リスト
     '''

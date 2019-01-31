@@ -192,24 +192,25 @@ def process0(casename, out):
     ''' オートエンコーダ学習 '''
 
     # 学習パラメータ定義
-    epoch = 500
+    epoch = 2000
     batchsize = 50
     logdir = f'{out}/res_{casename}_{ut.snow}'
     model, _, train_iter, valid_iter = get_task_data(casename, batchsize)
-    M_.train_model(model, train_iter, valid_iter, epoch=epoch, out=logdir)
+    M_.train_model(model, train_iter, valid_iter, epoch=epoch, out=logdir,
+                   alpha=0.01)
 
 
 def process0_resume(casename, out):
     ''' オートエンコーダ学習 '''
 
     # 学習パラメータ定義
-    epoch = 500
+    epoch = 2000
     batchsize = 50
     logdir = f'{out}/res_{casename}_{ut.snow}'
-    model, _, train_iter, valid_iter = get_task_data(casename, batchsize)
     init_file = check_snapshot(out)
+    model, _, train_iter, valid_iter = get_task_data(casename, batchsize)
     M_.train_model(model, train_iter, valid_iter, epoch=epoch, out=logdir,
-                   init_file=init_file)
+                   init_file=init_file, alpha=0.01)
 
 
 def task0(*args, **kwargs):
@@ -247,14 +248,17 @@ def task0(*args, **kwargs):
 ################################################################################
 
 def __test__():
-    with ut.chdir(f'{SRC_DIR}/__result__/case4_2'):
-        path = ut.select_file('.', key=r'res_.*')
-        with ut.chdir(path):
-            log = ut.load('log.json', from_json=True)
-            loss = [l['main/loss'] for l in log]
-            plt.ylim((180000, 210000))
-            plt.plot(np.array(loss))
-            plt.show()
+    mu = np.zeros(3, dtype=np.float32)
+    sigma = np.ones(3, dtype=np.float32)
+
+    p_z = chainer.distributions.Normal(loc=mu, scale=sigma)
+    q_z = chainer.distributions.Normal(loc=mu+10, scale=sigma)
+    p_x = chainer.distributions.Bernoulli(logit=sigma-0.5)
+
+    l_rec = p_x.log_prob(mu)
+    d_kl = chainer.kl_divergence(q_z, p_z)
+    print(l_rec)
+    print(d_kl)
 
 
 def get_args():

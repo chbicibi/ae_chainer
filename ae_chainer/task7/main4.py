@@ -42,7 +42,7 @@ def process4(casename, out):
     N = 30
 
     # 学習データ作成
-    # train_data_p10 = D_.MapChain(ms.crop_front_sq, ms.get_it(N)('plate_10'))
+    train_data_p10 = D_.MapChain(ms.crop_front_sq, ms.get_it(N)('plate_10'))
     # train_data_00 = D_.MapChain(ms.crop_center_sq, ms.get_it(10)('wing_00'))
     train_data_10 = D_.MapChain(ms.crop_front_sq, ms.get_it(N)('wing_10'))
     train_data_20 = D_.MapChain(ms.crop_front_sq, ms.get_it(N)('wing_20'))
@@ -89,59 +89,59 @@ def process4(casename, out):
         with chainer.using_config('train', False), chainer.no_backprop_mode():
             return model.decode(z, inference=True)
 
+    exf = ms.vorticity
+
     x0 = model.xp.asarray(train_data_10[:1])
     x1 = model.xp.asarray(train_data_10[15:16]) # 移動
     x2 = model.xp.asarray(train_data_20[15:16]) # 回転, 拡大
     x3 = model.xp.asarray(train_data_30[15:16]) # 回転, 拡大
     # x2c = model.xp.asarray(train_data_30c[15:16]) # 回転, 拡大, 移動
-    # x1 = model.xp.asarray(train_data_p10[:1])
+    x0p = model.xp.asarray(train_data_p10[:1])
 
     z0 = enc(x0)
     z1 = enc(x1)
     z2 = enc(x2)
     z3 = enc(x3)
+    z0p = enc(x0p)
 
-    exf = ms.vorticity
+    ### Plot Case ###
+    x_s0, x_s1 = x0, x1 # 渦移動
+    # x_s0, x_s1 = x0, x3 # 翼回転
+    # x_s0, x_s1 = x0, x0p # 翼変形
+
+    z_s0, z_s1 = z0, z1 # 渦移動
+    # z_s0, z_s1 = z0, z3 # 翼回転
+    # z_s0, z_s1 = z0, z0p # 翼変形
+    # z_s0, z_s1 = 0.5 * (z0 + z3), z2 # 中間
 
     with ut.chdir('__img__'):
-        V_.show_frame(x0[0], exf=exf, file=f'src_x0.png')
-        V_.show_frame(x3[0], exf=exf, file=f'src_x1.png')
+        V_.show_frame(x_s0[0], exf=exf, file=f'src_x0.png')
+        V_.show_frame(x_s1[0], exf=exf, file=f'src_x1.png')
         # return
 
         fig, ax, plot_z = make_plot_z()
-        # plot_z(z0)
-        # plot_z(z2)
-        # plot_z(z3)
-        # plot_z(z2*2-z0)
-        # plot_z(z3-z2*2+z0)
-        # # plot_z(z3-z2+z1)
-        # plot_z()
-        # return
+
+        if False:
+            plot_z(z0)
+            plot_z(z2)
+            plot_z(z3)
+            plot_z(z2*2-z0)
+            plot_z(z3-z2*2+z0)
+            # plot_z(z3-z2+z1)
+            plot_z()
+            return
 
         for i in range(0, 21):
             t = i / 20
             print(f't={t}')
-            # z = (1 - t) * z0 + t * z1 # 渦移動
-            z = (1 - t) * z0 + t * z3 # 翼回転
-            # z = 0.5 * (1 - t) * (z0 + z3) + t * z2 # 中間
-            # if i == 41:
-            #     z = z3
-            # else:
-            # z = z0 + (z2c - z2) * t
-            # z.array[0, :48] = 0.0
-            # z = 0 * z0 + np.random.rand(1, 64)
-            plot_z(z)
+
+            z = (1 - t) * z_s0 + t * z_s1
             y = dec(z)
-            # plot_data = y.array[0]
-            plot_data = np.concatenate([x0, y.array, x3])
+
+            plot_data = np.concatenate([x_s0, y.array, x_s1])
+            plot_z(z)
             V_.show_frame(plot_data, exf=exf,
                           file=f'recon_{casename}_{i:02d}.png')
-            # if t < 0:
-            #     V_.show_frame(y.array[0], exf=ms.vorticity,
-            # file=f'recon_t=n_{1+t:.1f}.png')
-            # else:
-            #     V_.show_frame(y.array[0], exf=ms.vorticity,
-            # file=f'recon_t=p_{t:.1f}.png')
             plt.pause(0.001)
         plot_z()
 

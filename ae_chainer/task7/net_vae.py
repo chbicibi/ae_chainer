@@ -39,19 +39,6 @@ class VAELoss(chainer.Chain, N_.AEBase):
         p_z = self.prior()
         x_ext = F.repeat(x_, self.k, axis=0)
 
-        # q_z = self.adapt(q_z)
-        # p_z = self.adapt(p_z)
-        # x_ext = self.adapt(x_ext)
-
-        # print('q_z:', type(q_z.mean.array), q_z.xp)
-        # print('p_z:', type(p_z.mean.array), p_z.xp)
-        # print('p_x:', type(p_x.mean.array))
-        # print('x_ext:', type(x_ext.array), x_ext.xp)
-        # exit()
-
-        # def to_a(v):
-        #     return chainer.cuda.to_cpu(v.array)
-
         reconstr = self.batch_mean(p_x.log_prob(x_ext))
         kl_penalty = self.batch_mean(chainer.kl_divergence(q_z, p_z))
         loss = self.beta * kl_penalty - reconstr

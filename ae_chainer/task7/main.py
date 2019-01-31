@@ -188,80 +188,11 @@ vorticity = vorticity0
 
 ################################################################################
 
-def process0(key, modelname, out):
-    ''' オートエンコーダ学習 '''
-
-    # 学習パラメータ定義
-    epoch = 500
-    batchsize = 60
-    logdir = f'{out}/res_{key}_{modelname}_{ut.snow}'
-
-    model, _, train_iter, valid_iter = get_task_data(key, modelname, batchsize)
-
-    M_.train_model(model, train_iter, valid_iter, epoch=epoch, out=logdir)
-
-
-def process0_resume(key, modelname, out):
-    ''' オートエンコーダ学習 '''
-
-    # 学習パラメータ定義
-    epoch = 500
-    batchsize = 60
-    logdir = f'{out}/res_{key}_{modelname}_{ut.snow}'
-
-    model, _, train_iter, valid_iter = get_task_data(key, modelname, batchsize)
-
-    init_file = check_snapshot(out)
-
-    M_.train_model(model, train_iter, valid_iter, epoch=epoch, out=logdir,
-                   init_file=init_file)
-
-
-def task0(*args, **kwargs):
-    ''' task0: 学習メイン '''
-
-    print(sys._getframe().f_code.co_name)
-
-    # keys = 'plate_10', 'wing_00', 'plate_20', 'wing_15', 'plate_30', 'wing_05'
-    # keys = 'wing_30',
-    # keys = 'plate_30', 'plate_20', 'plate_10', 'plate_00', 'wing_30', 'wing_20', 'wing_10', 'wing_00'
-    name = kwargs.get('case', None) or 'case6_4'
-    out = f'__result__/{name}'
-    error = None
-
-    try:
-        for key in [0]:
-            if kwargs.get('resume'):
-                process0_resume(key, name, out)
-            else:
-                process0(key, name, out)
-
-    except Exception as e:
-        error = e
-        tb = traceback.format_exc()
-        print('Error:', error)
-        print(tb)
-
-    if kwargs.get('sw', 0) < 3600:
-        return
-
-    with ut.EmailIO(None, 'ae_chainer: Task is Complete') as e:
-        print(sys._getframe().f_code.co_name, file=e)
-        print(ut.strnow(), file=e)
-        if 'sw' in kwargs:
-            print('Elapsed:', kwargs['sw'], file=e)
-        if error:
-            print('Error:', error)
-            print(tb)
-
-
-################################################################################
-
 def check_snapshot(out, show=False):
     # モデルのパスを取得
-    respath = ut.select_file(out, key=r'res_.*', idx=-1)
+    respath = ut.select_file(out, key=r'res_.*', idx=None)
     print('path:', respath)
-    file = ut.select_file(respath, key=r'snapshot_.*', idx=-1)
+    file = ut.select_file(respath, key=r'snapshot_.*', idx=None)
     print('file:', file)
 
     if show:

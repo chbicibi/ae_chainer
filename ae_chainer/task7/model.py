@@ -506,6 +506,47 @@ def get_model_case9_1():
     return loss
 
 
+def get_model_case9_2():
+    ''' VAE
+    z: 64dim
+    '''
+    model = N_.CAEList(
+        N_.CAEChainM(3, 8, activation=(F.sigmoid, None), ksize=5, n_conv=2),
+        N_.CAEChainM(None, 16, ksize=5, n_conv=2),
+        N_.CAEChainM(None, 32, ksize=5, n_conv=2),
+        N_.CAEChainM(None, 64, ksize=5, n_conv=2),
+        N_.CAEChainM(None, 64, ksize=5, n_conv=2),
+        N_.CAEChainM(None, 128, ksize=5, n_conv=2),
+        N_.CAEChainM(None, 128, ksize=5, n_conv=2), # => (128, 3, 3)
+        N_.LAEChain(None, 384), # 1152 -> 384 (1 / 3)
+        N_.LAEChain(None, 128), # 384 -> 128/ (1 / 3)
+        NV_.VAEChain(None, 64)) # 128 -> 64 (1 / 2)
+
+    loss = NV_.VAELoss(model)
+    return loss
+
+
+def get_model_case9_3():
+    ''' VAE
+    z: 64dim
+    パラメータ数: (3*8+8*8+8*16+16*16+16*32+32*32+32*64+64*64+64*64+64*64*128+128*128+128*128+128*128)*5*5*2+
+    '''
+    model = N_.CAEList(
+        N_.CAEChainM(3, 8, activation=(F.sigmoid, None), ksize=3, n_conv=2),
+        N_.CAEChainM(None, 16, ksize=3, n_conv=2),
+        N_.CAEChainM(None, 32, ksize=3, n_conv=2),
+        N_.CAEChainM(None, 64, ksize=3, n_conv=2),
+        N_.CAEChainM(None, 64, ksize=3, n_conv=2),
+        N_.CAEChainM(None, 128, ksize=3, n_conv=2),
+        N_.CAEChainM(None, 128, ksize=3, n_conv=2), # => (128, 3, 3)
+        N_.LAEChain(None, 384), # 1152 -> 384 (1 / 3)
+        N_.LAEChain(None, 128), # 384 -> 128/ (1 / 3)
+        NV_.VAEChain(None, 64)) # 128 -> 64 (1 / 2)
+
+    loss = NV_.VAELoss(model)
+    return loss
+
+
 def get_model(name, sample=None):
     # 関数名自動取得に変更
 
@@ -531,8 +572,8 @@ def plot_loss_ex(trainer):
     fig, ax = plt.subplots()
     for d in ['top', 'right']:
         ax.spines[d].set_visible(False)
-    ylim_low = 180000
-    ylim_upp = 220000
+    ylim_low = float('inf')
+    ylim_upp = 0
 
     try:
         with ut.chdir(trainer.out):
@@ -543,11 +584,16 @@ def plot_loss_ex(trainer):
 
             for key in ('main/loss', 'val/main/loss'):
                 a = np.array([l[key] for l in log])
+                a = np.clip(a, 0, 1e6)
+
                 ax.plot(a, label=key)
-                ylim_low = min(np.min(a), ylim_low)
+                ylim_upp = max(np.ceil(np.max(a[min(len(a)-1,3):50]))/1000*1000,
+                               ylim_upp)
+                ylim_low = min(np.min(a)//1000*1000, ylim_low)
 
             ax.set_ylim((ylim_low, ylim_upp))
-            fig.grid()
+            ax.set_xlabel('epoch')
+            ax.grid(True)
             fig.legend()
             fig.savefig('loss1.png')
 
@@ -555,16 +601,23 @@ def plot_loss_ex(trainer):
         plt.close(fig)
 
 
-def lr_drop(trainer):
-    trainer.updater.get_optimizer('main').lr *= 0.1
+def lr_drop(alpha, start=1000):
+    def f_(trainer):
+        epoch = trainer.updater.epoch
+        if epoch < start:
+            return
+        # trainer.updater.get_optimizer('main').alpha *= 0.1
+        alpha_new = alpha * max(0.8**max((epoch-start)//50+1, 0), 0.01)
+        trainer.updater.get_optimizer('main').alpha = alpha_new
+    return f_
 
 
 def train_model(model, train_iter, valid_iter, epoch=10, out='__result__',
-                init_file=None, fix_trained=False):
+                init_file=None, fix_trained=False, alpha=0.001):
     learner = model
 
     # 最適化手法の選択
-    optimizer = Adam(alpha=0.001).setup(learner)
+    optimizer = Adam(alpha=alpha).setup(learner)
 
     if fix_trained:
         for m in model[:-1]:
@@ -584,7 +637,7 @@ def train_model(model, train_iter, valid_iter, epoch=10, out='__result__',
     ## モデルパラメータの統計を記録する
     trainer.extend(extensions.ParameterStatistics(learner.predictor,
                                                   {'std': np.std},
-                                                  report_grads=False,
+                                                  # report_grads=True,
                                                   prefix='links'))
 
     ## 学習率を記録する
@@ -634,6 +687,17 @@ def train_model(model, train_iter, valid_iter, epoch=10, out='__result__',
                                                  x_key='epoch',
                                                  file_name=file_name,
                                                  marker=None))
+            # param_names = ex_pname(link)
+            # for d in ('data', 'grad'):
+            #     observe_keys_std = [f'links/predictor/{key}/{d}/std'
+            #                         for key in param_names]
+            #     for l in ('enc', 'dec'):
+            #         file_name = f'std_{d}_{link.name}_{l}.png'
+            #         f_ = lambda s: l in s or f'bn{l[0]}' in s
+            #         keys = list(filter(f_, observe_keys_std))
+            #         trainer.extend(extensions.PlotReport(keys, x_key='epoch',
+            #                                              file_name=file_name,
+            #                                              marker=None))
 
     ## ネットワーク形状をdot言語で出力
     ## 可視化コード: ```dot -Tpng cg.dot -o [出力ファイル]```
@@ -648,11 +712,16 @@ def train_model(model, train_iter, valid_iter, epoch=10, out='__result__',
 
     if init_file:
         print('loading snapshot:', init_file)
-        chainer.serializers.load_npz(init_file, trainer)
+        try:
+            chainer.serializers.load_npz(init_file, trainer)
+
+        except KeyError:
+            raise
+            chainer.serializers.load_npz(init_file, trainer.updater, path='updater/')
 
     # 自作Extension
     trainer.extend(plot_loss_ex, trigger=(1, 'epoch'))
-    trainer.extend(lr_drop, trigger=(200, 'epoch'))
+    trainer.extend(lr_drop(alpha), trigger=(1, 'epoch'))
 
     # 学習を開始する
     trainer.run()
