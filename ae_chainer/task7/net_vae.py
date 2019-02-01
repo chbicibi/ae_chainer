@@ -12,6 +12,11 @@ import net as N_
 
 ################################################################################
 
+def vorticity(frame):
+    return frame[:, 0, :-2, 1:-1] - frame[:, 0, 2:, 1:-1] \
+         - frame[:, 1, 1:-1, :-2] + frame[:, 1, 1:-1, 2:]
+
+
 class VAELoss(chainer.Chain, N_.AEBase):
 
     def __init__(self, predictor, beta=1.0, k=1, device=-1):
@@ -45,7 +50,10 @@ class VAELoss(chainer.Chain, N_.AEBase):
         reporter.report({'loss': loss}, self)
         reporter.report({'reconstr': reconstr}, self)
         reporter.report({'kl_penalty': kl_penalty}, self)
-        return loss
+
+        mse = F.mean_squared_error(*map(vorticity, (x_, p_x.mean)))
+        # print('loss=', loss, 'mse=', mse)
+        return loss + mse * 10**9
 
     def encode(self, x, **kwargs):
         q_z = self.predictor.encode(x, **kwargs)

@@ -84,31 +84,31 @@ def get_it(size):
     return g_
 
 
-def get_task_data(_, modelname, batchsize=1):
-    ''' 学習データ作成
-    key == 'wing'
-    '''
+# def get_task_data(_, modelname, batchsize=1):
+#     ''' 学習データ作成
+#     key == 'wing'
+#     '''
 
-    # 学習データ作成
-    keys = ('wing_00', 'wing_10', 'wing_20', 'wing_30',
-            'plate_00', 'plate_10', 'plate_20', 'plate_30')
-    train_data = D_.MapChain(crop_random_sq, *map(get_it(400), keys),
-                        name='random_crop')
-    train = TrainDataset(train_data)
-    train_iter = SerialIterator(train, batchsize)
+#     # 学習データ作成
+#     keys = ('wing_00', 'wing_10', 'wing_20', 'wing_30',
+#             'plate_00', 'plate_10', 'plate_20', 'plate_30')
+#     train_data = D_.MapChain(crop_random_sq, *map(get_it(400), keys),
+#                         name='random_crop')
+#     train = TrainDataset(train_data)
+#     train_iter = SerialIterator(train, batchsize)
 
-    # 検証データ作成
-    keys = 'wing_05', 'wing_15'
-    valid_data = D_.MapChain(crop_random_sq, *map(get_it(100), keys),
-                        name='random_crop')
-    valid = TrainDataset(valid_data)
-    valid_iter = SerialIterator(valid, batchsize, repeat=False, shuffle=False)
+#     # 検証データ作成
+#     keys = 'wing_05', 'wing_15'
+#     valid_data = D_.MapChain(crop_random_sq, *map(get_it(100), keys),
+#                         name='random_crop')
+#     valid = TrainDataset(valid_data)
+#     valid_iter = SerialIterator(valid, batchsize, repeat=False, shuffle=False)
 
-    # 学習モデル作成
-    sample = train_data[:1]
-    model = M_.get_model(modelname, sample=sample)
+#     # 学習モデル作成
+#     sample = train_data[:1]
+#     model = M_.get_model(modelname, sample=sample)
 
-    return model, train_data, train_iter, valid_iter
+#     return model, train_data, train_iter, valid_iter
 
 
 ################################################################################

@@ -509,6 +509,8 @@ def get_model_case9_1():
 def get_model_case9_2():
     ''' VAE
     z: 64dim
+    パラメータ数: ((3*8+8*8+8*16+16*16+16*32+32*32+32*64+64*64+64*64+64*64*128+128*128+128*128+128*128)*5*5+
+                1152*384+384*128+128*64)*2=30283824
     '''
     model = N_.CAEList(
         N_.CAEChainM(3, 8, activation=(F.sigmoid, None), ksize=5, n_conv=2),
@@ -529,7 +531,8 @@ def get_model_case9_2():
 def get_model_case9_3():
     ''' VAE
     z: 64dim
-    パラメータ数: (3*8+8*8+8*16+16*16+16*32+32*32+32*64+64*64+64*64+64*64*128+128*128+128*128+128*128)*5*5*2+
+    パラメータ数: ((3*8+8*8+8*16+16*16+16*32+32*32+32*64+64*64+64*64+64*64*128+128*128+128*128+128*128)*3*3+
+                1152*384+384*128+128*64)*2=11541808
     '''
     model = N_.CAEList(
         N_.CAEChainM(3, 8, activation=(F.sigmoid, None), ksize=3, n_conv=2),
@@ -540,7 +543,7 @@ def get_model_case9_3():
         N_.CAEChainM(None, 128, ksize=3, n_conv=2),
         N_.CAEChainM(None, 128, ksize=3, n_conv=2), # => (128, 3, 3)
         N_.LAEChain(None, 384), # 1152 -> 384 (1 / 3)
-        N_.LAEChain(None, 128), # 384 -> 128/ (1 / 3)
+        N_.LAEChain(None, 128), # 384 -> 128 (1 / 3)
         NV_.VAEChain(None, 64)) # 128 -> 64 (1 / 2)
 
     loss = NV_.VAELoss(model)
@@ -607,7 +610,7 @@ def lr_drop(alpha, start=1000):
         if epoch < start:
             return
         # trainer.updater.get_optimizer('main').alpha *= 0.1
-        alpha_new = alpha * max(0.8**max((epoch-start)//50+1, 0), 0.01)
+        alpha_new = alpha * max(0.8**max((epoch-start)//50+1, 0), 0.1)
         trainer.updater.get_optimizer('main').alpha = alpha_new
     return f_
 

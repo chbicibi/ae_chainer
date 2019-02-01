@@ -24,7 +24,7 @@ import net_vae as NV_
 import model as M_
 import vis as V_
 import anim as A_
-import main as ms
+import main as MS_
 
 
 # パス
@@ -38,16 +38,16 @@ SRC_FILENAME = os.path.splitext(SRC_FILE)[0]
 def process4(casename, out):
     ''' モデル読み出し+可視化 '''
 
-    file = ms.check_snapshot(out)
+    file = MS_.check_snapshot(out)
     N = 30
 
     # 学習データ作成
-    train_data_p10 = D_.MapChain(ms.crop_front_sq, ms.get_it(N)('plate_10'))
-    # train_data_00 = D_.MapChain(ms.crop_center_sq, ms.get_it(10)('wing_00'))
-    train_data_10 = D_.MapChain(ms.crop_front_sq, ms.get_it(N)('wing_10'))
-    train_data_20 = D_.MapChain(ms.crop_front_sq, ms.get_it(N)('wing_20'))
-    train_data_30 = D_.MapChain(ms.crop_front_sq, ms.get_it(N)('wing_30'))
-    # train_data_30c = D_.MapChain(ms.crop_center_sq, ms.get_it(N)('wing_30'))
+    train_data_p10 = D_.MapChain(MS_.crop_front_sq, MS_.get_it(N)('plate_10'))
+    # train_data_00 = D_.MapChain(MS_.crop_center_sq, MS_.get_it(10)('wing_00'))
+    train_data_10 = D_.MapChain(MS_.crop_front_sq, MS_.get_it(N)('wing_10'))
+    train_data_20 = D_.MapChain(MS_.crop_front_sq, MS_.get_it(N)('wing_20'))
+    train_data_30 = D_.MapChain(MS_.crop_front_sq, MS_.get_it(N)('wing_30'))
+    # train_data_30c = D_.MapChain(MS_.crop_center_sq, MS_.get_it(N)('wing_30'))
     train_data = train_data_10
 
     # モデル読み込み
@@ -57,13 +57,13 @@ def process4(casename, out):
     model.to_cpu()
 
     if False:
-        V_.show_frame(ms.vorticity(train_data[0]))
+        V_.show_frame(MS_.vorticity(train_data[0]))
         return
 
     def make_plot_z():
         fig, ax = plt.subplots()
         l = []
-        def plot_z(z=None):
+        def plot_z(z=None, plot=False):
             if z is None:
                 if not l:
                     return
@@ -73,7 +73,8 @@ def process4(casename, out):
                 return
             ax.cla()
             l.append(z.array.flatten())
-            ax.plot(np.array(l))
+            if not plot:
+                ax.plot(np.array(l))
             return z
         return fig, ax, plot_z
 
@@ -89,7 +90,7 @@ def process4(casename, out):
         with chainer.using_config('train', False), chainer.no_backprop_mode():
             return model.decode(z, inference=True)
 
-    exf = ms.vorticity
+    exf = MS_.vorticity
 
     x0 = model.xp.asarray(train_data_10[:1])
     x1 = model.xp.asarray(train_data_10[15:16]) # 移動
@@ -107,12 +108,15 @@ def process4(casename, out):
     ### Plot Case ###
     x_s0, x_s1 = x0, x1 # 渦移動
     # x_s0, x_s1 = x0, x3 # 翼回転
+    # x_s0, x_s1 = x0, x2 # 翼回転2
     # x_s0, x_s1 = x0, x0p # 翼変形
 
     z_s0, z_s1 = z0, z1 # 渦移動
     # z_s0, z_s1 = z0, z3 # 翼回転
+    # z_s0, z_s1 = z0, z2 # 翼回転2
     # z_s0, z_s1 = z0, z0p # 翼変形
     # z_s0, z_s1 = 0.5 * (z0 + z3), z2 # 中間
+    z_diff = z1 - z0
 
     with ut.chdir('__img__'):
         V_.show_frame(x_s0[0], exf=exf, file=f'src_x0.png')
@@ -135,10 +139,17 @@ def process4(casename, out):
             t = i / 20
             print(f't={t}')
 
-            z = (1 - t) * z_s0 + t * z_s1
-            y = dec(z)
+            # z = (1 - t) * z_s0 + t * z_s1
+            # y = dec(z)
 
-            plot_data = np.concatenate([x_s0, y.array, x_s1])
+            x = model.xp.asarray(train_data_30[i:i+1])
+            z_base = enc(x)
+            z = z_base + z_diff
+            y1 = dec(z_base)
+            y2 = dec(z)
+            plot_data = np.concatenate([x, y1.array, y2.array])
+
+            # plot_data = np.concatenate([x_s0, y.array, x_s1])
             plot_z(z)
             V_.show_frame(plot_data, exf=exf,
                           file=f'recon_{casename}_{i:02d}.png')
@@ -149,16 +160,16 @@ def process4(casename, out):
 def process4_1(casename, out):
     ''' サンプルデータアニメーション '''
 
-    # file = ms.check_snapshot(out)
+    # file = MS_.check_snapshot(out)
     N = 300
 
     # 学習データ作成
-    # train_data_p10 = D_.MapChain(ms.crop_front_sq, ms.get_it(N)('plate_10'))
-    # train_data_00 = D_.MapChain(ms.crop_center_sq, ms.get_it(10)('wing_00'))
-    # train_data_10 = D_.MapChain(ms.crop_front_sq, ms.get_it(N)('wing_10'))
-    # train_data_20 = D_.MapChain(ms.crop_front_sq, ms.get_it(N)('wing_20'))
-    train_data_30 = D_.MapChain(ms.crop_front_sq, ms.get_it(N)('wing_30'))
-    # train_data_30c = D_.MapChain(ms.crop_center_sq, ms.get_it(N)('wing_30'))
+    # train_data_p10 = D_.MapChain(MS_.crop_front_sq, MS_.get_it(N)('plate_10'))
+    # train_data_00 = D_.MapChain(MS_.crop_center_sq, MS_.get_it(10)('wing_00'))
+    # train_data_10 = D_.MapChain(MS_.crop_front_sq, MS_.get_it(N)('wing_10'))
+    # train_data_20 = D_.MapChain(MS_.crop_front_sq, MS_.get_it(N)('wing_20'))
+    train_data_30 = D_.MapChain(MS_.crop_front_sq, MS_.get_it(N)('wing_30'))
+    # train_data_30c = D_.MapChain(MS_.crop_center_sq, MS_.get_it(N)('wing_30'))
 
     fig, axes = plt.subplots(nrows=1, ncols=train_data_30[0].shape[0]+1)
     anim = A_.Animation(fig, frames=N)
@@ -168,7 +179,7 @@ def process4_1(casename, out):
         frame = train_data_30[i]
         data = map(lambda f, d: lambda ax: f(d, ax),
                    (V_.plot_vel, V_.plot_vel, V_.plot_gray, V_.plot_vor),
-                   (*frame, ms.vorticity(frame)))
+                   (*frame, MS_.vorticity(frame)))
         V_.show_frame_m(data, fig, axes, file=False)
 
     anim(plot_, file='anim.mp4')

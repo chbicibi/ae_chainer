@@ -22,6 +22,7 @@ import dataset as D_
 import net_vae as NV_
 import model as M_
 import vis as V_
+import main as MS_
 
 
 # パス
@@ -32,58 +33,6 @@ SRC_FILENAME = os.path.splitext(SRC_FILE)[0]
 
 ################################################################################
 
-def loop(data):
-    while True:
-        yield data
-
-
-def tapp(data, fn=None):
-    if fn:
-        print(*fn(data))
-    else:
-        print(data)
-    return data
-
-
-################################################################################
-
-def get_extract(key):
-    # vmin, vmax = {
-    #     'plate_00': (-0.668, 1.261),
-    #     'plate_10': (-1.329, 1.963),
-    #     'plate_20': (-2.096, 2.726),
-    #     'plate_30': (-2.289, 3.797),
-    #     'wing_00': (-0.759, 1.444),
-    #     'wing_05': (-1.041, 1.558),
-    #     'wing_10': (-1.218, 1.728),
-    #     'wing_15': (-1.617, 2.181),
-    #     'wing_20': (-1.847, 2.842),
-    #     'wing_30': (-2.192, 3.760),
-    # }[key]
-    vmin, vmax = -3.8, 3.8
-    return D_.extract_uvf_norm(vmin, vmax)
-
-
-def get_it(size):
-    def g_(key):
-        print('create data:', key)
-        cache_path = f'__cache__/{key}'
-        original_data = D_.get_original_data(key, size=2000) # (2000, 512, 1024, 5)
-
-        train_data = D_.get_train_data(get_extract(key), original_data,
-                                       name='full_norm_uvf_38', cache=True,
-                                       cache_path=cache_path)
-        a = train_data[2000-size:2000]
-        return a
-
-    src = '..\\__cache__'
-    dst = '__cache__'
-    if not os.path.isdir(dst) and os.path.isdir(src):
-        print('symlink:', src, '<<===>>', dst)
-        os.symlink(src, dst)
-    return g_
-
-
 def get_task_data(casename, batchsize=1):
     ''' 学習データ作成
     key == 'wing'
@@ -93,14 +42,14 @@ def get_task_data(casename, batchsize=1):
     keys = ('wing_00', 'wing_10', 'wing_20', 'wing_30',
             'plate_00', 'plate_10', 'plate_20', 'plate_30')
     # keys = ('wing_00',)
-    train_data = D_.MapChain(crop_random_sq, *map(get_it(200), keys),
+    train_data = D_.MapChain(crop_random_sq, *map(MS_.get_it(200), keys),
                              name='random_crop')
     train = TrainDataset(train_data)
     train_iter = SerialIterator(train, batchsize)
 
     # 検証データ作成
     keys = 'wing_05', 'wing_15'
-    valid_data = D_.MapChain(crop_random_sq, *map(get_it(100), keys),
+    valid_data = D_.MapChain(crop_random_sq, *map(MS_.get_it(100), keys),
                              name='random_crop')
     valid = TrainDataset(valid_data)
     valid_iter = SerialIterator(valid, batchsize, repeat=False, shuffle=False)
@@ -110,28 +59,6 @@ def get_task_data(casename, batchsize=1):
     model = M_.get_model(casename, sample=sample)
 
     return model, train_data, train_iter, valid_iter
-
-
-def check_snapshot(out, show=False):
-    # モデルのパスを取得
-
-    respath = ut.select_file(out, key=r'res_.*', idx=None)
-    print('path:', respath)
-    file = ut.select_file(respath, key=r'snapshot_.*', idx=-1)
-    print('file:', file)
-
-    if show:
-        # npz保存名確認
-        with np.load(file) as npzfile:
-            for f in npzfile:
-                print(f)
-                continue
-                if f[-1] == 'W':
-                    print(f)
-                    print(npzfile[f].shape)
-                # print(npzfile[f].dtype, npzfile[f].shape, f)
-            # print(npzfile['extensions/LogReport/_log'])
-    return file
 
 
 ################################################################################
@@ -192,7 +119,7 @@ def process0(casename, out):
     ''' オートエンコーダ学習 '''
 
     # 学習パラメータ定義
-    epoch = 2000
+    epoch = 3000
     batchsize = 50
     logdir = f'{out}/res_{casename}_{ut.snow}'
     model, _, train_iter, valid_iter = get_task_data(casename, batchsize)
@@ -204,10 +131,10 @@ def process0_resume(casename, out):
     ''' オートエンコーダ学習 '''
 
     # 学習パラメータ定義
-    epoch = 2000
+    epoch = 3000
     batchsize = 50
     logdir = f'{out}/res_{casename}_{ut.snow}'
-    init_file = check_snapshot(out)
+    init_file = MS_.check_snapshot(out)
     model, _, train_iter, valid_iter = get_task_data(casename, batchsize)
     M_.train_model(model, train_iter, valid_iter, epoch=epoch, out=logdir,
                    init_file=init_file, alpha=0.01)
