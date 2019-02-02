@@ -16,8 +16,9 @@ SRC_FILENAME = os.path.splitext(SRC_FILE)[0]
 
 ################################################################################
 
-def thin_snapshot(snapshots):
+def thin_snapshot(snapshots, dirname=''):
     size = 0
+    total = 0
     for snapshot in snapshots:
         m = re.search(r'(?<=epoch-)\d+', snapshot)
         if not m:
@@ -25,9 +26,12 @@ def thin_snapshot(snapshots):
         epoch = int(m[0])
         if epoch < 10 or epoch % 10 == 0:
             continue
-        print(snapshot, '=> Remove')
+        # print(snapshot, '=> Remove', end='\r')
         size += ut.filesize(snapshot)
+        total += 1
         os.remove(snapshot)
+    if total:
+        print(dirname, 'total:', total)
     return size
 
 
@@ -47,9 +51,9 @@ def remove_samll_dirs():
                 shutil.rmtree(dirname)
                 size += dirsize
             else:
-                print()
+                print('\r')
                 with ut.chdir(dirname):
-                    size += thin_snapshot(snapshots)
+                    size += thin_snapshot(snapshots, d)
         print(f'free: {size/1048576:.2f}MB')
 
 
