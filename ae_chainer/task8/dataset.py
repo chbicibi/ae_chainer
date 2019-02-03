@@ -251,7 +251,7 @@ def extract_uv(frame):
 
 
 def extract_uvf(frame):
-    return frame[:3].transpose(2, 0, 1)
+    return np.stack([frame[:, :, 0], frame[:, :, 1], frame[:, :, 3]])
 
 
 def extract_uv_norm(vmin, vmax, clip=True):
@@ -275,6 +275,14 @@ def extract_uvf_norm(vmin, vmax, clip=True):
             a = np.clip(a, 0, 1)
         # return a.transpose(2, 0, 1) # => (H, W, C) -> (C, H, W)
         return np.stack([a[:, :, 0], a[:, :, 1], f])
+    return f_
+
+
+def extract_uvf_sigmoid(a=1):
+    def f_(frame):
+        return np.stack([C_.sigmoid(frame[:, :, 0] - 1, a),
+                         C_.sigmoid(frame[:, :, 1], a),
+                         frame[:, :, 3]])
     return f_
 
 

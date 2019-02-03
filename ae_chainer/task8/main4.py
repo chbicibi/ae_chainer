@@ -3,6 +3,7 @@ import glob
 import itertools
 import os
 import shutil
+import subprocess
 import sys
 import traceback
 from operator import itemgetter
@@ -161,28 +162,69 @@ def process4_1(casename, out):
     ''' サンプルデータアニメーション '''
 
     # file = MS_.check_snapshot(out)
-    N = 300
+    N = 100
+
+    def sigmoid(x, a=1):
+        return 1 / (1 + np.exp(-a * x))
+
+    def logit(x, a=1):
+        if a < 0:
+            return -float('inf')
+        elif a >= 1:
+            return float('inf')
+        return np.log(x / (1 - x)) / a
+
+    # x = sigmoid(5.5, 2)
+    # print(x)
+    # y = logit(x, 2)
+    # print(y)
+    # exit()
 
     # 学習データ作成
-    # train_data_p10 = D_.MapChain(MS_.crop_front_sq, MS_.get_it(N)('plate_10'))
-    # train_data_00 = D_.MapChain(MS_.crop_center_sq, MS_.get_it(10)('wing_00'))
-    # train_data_10 = D_.MapChain(MS_.crop_front_sq, MS_.get_it(N)('wing_10'))
-    # train_data_20 = D_.MapChain(MS_.crop_front_sq, MS_.get_it(N)('wing_20'))
+    train_data_p10 = D_.MapChain(MS_.crop_front_sq, MS_.get_it(N)('plate_10'))
+    train_data_00 = D_.MapChain(MS_.crop_front_sq, MS_.get_it(N)('wing_00'))
+    train_data_10 = D_.MapChain(MS_.crop_front_sq, MS_.get_it(N)('wing_10'))
+    train_data_20 = D_.MapChain(MS_.crop_front_sq, MS_.get_it(N)('wing_20'))
     train_data_30 = D_.MapChain(MS_.crop_front_sq, MS_.get_it(N)('wing_30'))
-    # train_data_30c = D_.MapChain(MS_.crop_center_sq, MS_.get_it(N)('wing_30'))
+    train_data_30c = D_.MapChain(MS_.crop_center_sq, MS_.get_it(N)('wing_30'))
 
-    fig, axes = plt.subplots(nrows=1, ncols=train_data_30[0].shape[0]+1)
+    train_data = train_data_30
+
+    fig, axes = plt.subplots(nrows=1, ncols=train_data[0].shape[0]+1)
     anim = A_.Animation(fig, frames=N)
 
     def plot_(i):
         [ax.cla() for ax in axes]
-        frame = train_data_30[i]
+        frame = train_data[i]
+
+        # frame = sigmoid(frame, 5)
+
+        ### sigmoid
+        a = 2
+        frame = np.stack([sigmoid(frame[0]-1, a), sigmoid(frame[1], a), frame[2]])
+        plotv = lambda frame: MS_.vorticity0_logit(frame, a)
+
+        ### linear
+        # f_ = lambda frame: np.clip(frame / 4 + 0.5, 0, 1)
+        # frame = np.stack([f_(frame[0]-1), f_(frame[1]), frame[2]])
+        # plotv = MS_.vorticity
+
         data = map(lambda f, d: lambda ax: f(d, ax),
                    (V_.plot_vel, V_.plot_vel, V_.plot_gray, V_.plot_vor),
-                   (*frame, MS_.vorticity(frame)))
+                   (*frame, plotv(frame)))
         V_.show_frame_m(data, fig, axes, file=False)
 
     anim(plot_, file='anim.mp4')
+
+
+def plot_cg(casename, out):
+    with ut.chdir(out):
+        dot_path = ut.select_file(files=ut.globm('**/cg.dot'), idx=None)
+        # dot = respath + 'cg.dot'
+        png_path = os.path.splitext(dot_path)[0] + '.png'
+        code = subprocess.call(['dot', '-Tpng', dot_path, '-o', png_path])
+    print(code)
+    return code
 
 
 def task4(*args, **kwargs):
@@ -193,7 +235,16 @@ def task4(*args, **kwargs):
         check_snapshot(out, show=True)
         return
 
-    process4(casename, out)
+    mode = kwargs.get('mode')
+
+    if not mode:
+        process4(casename, out)
+
+    elif mode == '1':
+        process4_1(casename, out)
+
+    elif mode == '2':
+        plot_cg(casename, out)
 
 
 ################################################################################
@@ -204,8 +255,8 @@ def __test__():
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('mode', nargs='?', default='4',
-                        choices=['', '4'],
+    parser.add_argument('mode', nargs='?', default='',
+                        choices=['', '1', '2'],
                         help='Number of main procedure')
     parser.add_argument('--case', '-c', default='',
                         help='Training case name')
@@ -245,8 +296,8 @@ def main():
     if args.test:
         __test__()
 
-    elif args.mode in '0123456789':
-        taskname = 'task' + args.mode
+    else:
+        taskname = 'task4'
         if taskname in globals():
             f_ = globals().get(taskname)
             with ut.stopwatch(taskname) as sw:

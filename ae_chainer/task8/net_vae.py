@@ -17,6 +17,11 @@ def vorticity(frame):
          - frame[:, 1, 1:-1, :-2] + frame[:, 1, 1:-1, 2:]
 
 
+def vorticity_logit15(frame, a=1.5):
+    return C_.logit(frame[0, :-2, 1:-1], a) - C_.logit(frame[0, 2:, 1:-1], a) \
+         - C_.logit(frame[1, 1:-1, :-2], a) + C_.logit(frame[1, 1:-1, 2:], a)
+
+
 class VAELoss(chainer.Chain, N_.AEBase):
 
     def __init__(self, predictor, beta=1.0, k=1, device=-1):
@@ -37,26 +42,34 @@ class VAELoss(chainer.Chain, N_.AEBase):
     def __call__(self, x, x_=None, **kwargs):
         if x_ is None:
             x_ = x
+        if self.k > 1:
+            x_ = F.repeat(x_, self.k, axis=0)
 
         q_z = self.encode(x, **kwargs)
         z = self.sample(q_z)
         p_x = self.decode(z, **kwargs)
         p_z = self.prior()
-        x_ext = F.repeat(x_, self.k, axis=0)
 
-        reconstr = self.batch_mean(p_x.log_prob(x_ext))
+        # 追加誤差関数
+        # mse_vel = F.mean_squared_error(x_, p_x.mean)
+        # mse_vor = F.mean_squared_error(*map(vorticity, (x_, p_x.mean)))
+        mse_vel = self.batch_mean(F.squared_error(x_, p_x.mean))
+        mse_vor = self.batch_mean(
+            F.squared_error(*map(vorticity_logit15, (x_, F.sigmoid(p_x.mean)))))
+        reporter.report({'mse_vel': mse_vel}, self)
+        reporter.report({'mse_vor': mse_vor}, self)
+
+        # 誤差関数
+        reconstr = self.batch_mean(p_x.log_prob(x_))
+        # reconstr = -self.batch_mean((p_x.mean - x_) ** 2)
         kl_penalty = self.batch_mean(chainer.kl_divergence(q_z, p_z))
-        loss = self.beta * kl_penalty - reconstr
+        loss = self.beta * kl_penalty - reconstr + mse_vor
+
         reporter.report({'loss': loss}, self)
         reporter.report({'reconstr': reconstr}, self)
         reporter.report({'kl_penalty': kl_penalty}, self)
 
-        mse_vel = F.mean_squared_error(x_, p_x.mean)
-        mse_vor = F.mean_squared_error(*map(vorticity, (x_, p_x.mean)))
-        reporter.report({'mse_vel': mse_vel}, self)
-        reporter.report({'mse_vor': mse_vor}, self)
-
-        return loss
+        return loss + mse_vor
 
     def encode(self, x, **kwargs):
         q_z = self.predictor.encode(x, **kwargs)

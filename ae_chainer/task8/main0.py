@@ -13,7 +13,7 @@ import matplotlib.colors as plc
 
 import chainer
 import chainer.functions as F
-from chainer.iterators import SerialIterator
+import chainer.iterators as I #import SerialIterator
 
 import myutils as ut
 
@@ -42,17 +42,19 @@ def get_task_data(casename, batchsize=1):
     keys = ('wing_00', 'wing_10', 'wing_20', 'wing_30',
             'plate_00', 'plate_10', 'plate_20', 'plate_30')
     # keys = ('wing_00',)
-    train_data = D_.MapChain(MS_.crop_random_sq, *map(MS_.get_it(size=None), keys),
+    train_data = D_.MapChain(MS_.crop_random_sq,
+                             *map(MS_.get_it(size=1250, cache=False), keys),
                              name='random_crop')
-    train = MS_.TrainDataset(train_data)
-    train_iter = SerialIterator(train, batchsize)
+    train = MS_.TrainDataset(train_data, name='train')
+    train_iter = I.MultithreadIterator(train, batchsize, n_threads=32)
 
     # 検証データ作成
     keys = 'wing_05', 'wing_15'
-    valid_data = D_.MapChain(MS_.crop_random_sq, *map(MS_.get_it(size=None), keys),
+    valid_data = D_.MapChain(MS_.crop_random_sq,
+                             *zip(*map(MS_.get_it(size=500, cache=True), keys)),
                              name='random_crop')
-    valid = MS_.TrainDataset(valid_data)
-    valid_iter = SerialIterator(valid, batchsize, repeat=False, shuffle=False)
+    valid = MS_.TrainDataset(valid_data, name='valid')
+    valid_iter = I.MultithreadIterator(valid, batchsize, repeat=False, shuffle=False, n_threads=8)
 
     # 学習モデル作成
     sample = train_data[:1]
@@ -67,7 +69,7 @@ def process0(casename, out):
     ''' オートエンコーダ学習 '''
 
     # 学習パラメータ定義
-    epoch = 1000
+    epoch = 100
     batchsize = 50
     logdir = f'{out}/res_{casename}_{ut.snow}'
     model, _, train_iter, valid_iter = get_task_data(casename, batchsize)
@@ -75,17 +77,17 @@ def process0(casename, out):
                    alpha=0.01)
 
 
-def process0_resume(casename, out):
+def process0_resume(casename, out, init_all=True):
     ''' オートエンコーダ学習 '''
 
     # 学習パラメータ定義
-    epoch = 1000
+    epoch = 100
     batchsize = 50
     logdir = f'{out}/res_{casename}_{ut.snow}'
     init_file = MS_.check_snapshot(out)
     model, _, train_iter, valid_iter = get_task_data(casename, batchsize)
     M_.train_model(model, train_iter, valid_iter, epoch=epoch, out=logdir,
-                   init_file=init_file, alpha=0.01)
+                   init_file=init_file, alpha=0.01, init_all=init_all)
 
 
 def task0(*args, **kwargs):
@@ -96,10 +98,12 @@ def task0(*args, **kwargs):
     error = None
 
     try:
-        if kwargs.get('resume'):
-            process0_resume(casename, out)
-        else:
+        if kwargs.get('resume') == 'none':
             process0(casename, out)
+
+        else:
+            init_all = not kwargs.get('resume', '').startswith('m')
+            process0_resume(casename, out, init_all=init_all)
 
     except Exception as e:
         error = e
@@ -153,7 +157,7 @@ def get_args():
     # additional options
     parser.add_argument('--check-snapshot', '-s', action='store_true',
                         help='Print names in snapshot file')
-    parser.add_argument('--resume', '-r', action='store_true',
+    parser.add_argument('--resume', '-r', default='none',# action='store_true',
                         help='Resume with loading snapshot')
 
     # test option

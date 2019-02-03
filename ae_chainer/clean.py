@@ -46,7 +46,7 @@ def remove_samll_dirs():
                          if f.startswith('snapshot_')]
             print(d, f'snapshots={len(snapshots)}', end='')
 
-            if len(snapshots) < 10: # or ut.filesize(d) < 1048576:
+            if len(snapshots) < 10 and ut.filesize(d) < 100 * ut.MB1:
                 print(' => Remove')
                 shutil.rmtree(dirname)
                 size += dirsize

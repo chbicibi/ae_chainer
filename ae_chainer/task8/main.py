@@ -49,9 +49,19 @@ def tapp(data, fn=None):
     return data
 
 
+def sigmoid(x, a=1):
+    return 1 / (1 + np.exp(-a * x))
+
+
+def logit(x, a=1):
+    x_ = np.clip(x, 1e-5, 1-1e-5)
+    return np.where((0 < x) * (x < 1), np.log(x_ / (1 - x_)) / a, np.nan)
+
+
 ################################################################################
 
 def get_extract(key):
+    raise
     # vmin, vmax = {
     #     'plate_00': (-0.668, 1.261),
     #     'plate_10': (-1.329, 1.963),
@@ -68,24 +78,34 @@ def get_extract(key):
     return D_.extract_uvf_norm(vmin, vmax)
 
 
-def get_it(size=None):
-    def g_(key):
-        print('create data:', key)
-        cache_path = f'__cache__/{key}'
-        original_data = D_.get_original_data(key, size=2000) # (2000, 512, 1024, 5)
-
-        train_data = D_.get_train_data(get_extract(key), original_data,
-                                       name='full_norm_uvf_38', cache=False,
-                                       cache_path=cache_path)
-        if size:
-            return train_data[2000-size:2000]
-        return train_data
+def get_it(size=None, cache=False):
 
     src = '..\\__cache__'
     dst = '__cache__'
     if not os.path.isdir(dst) and os.path.isdir(src):
         print('symlink:', src, '<<===>>', dst)
         os.symlink(src, dst)
+
+    default_it = (os.path.join('__cache__', x) for x in 'FDCHX')
+    cache_default = next(filter(os.path.exists, default_it), '__cache__')
+
+    len_org = 2000
+
+    def g_(key):
+        print('create data:', key)
+
+        cache_path = os.path.join(cache_default + key)
+        cache_path = next(ut.iglobm(f'__cache__/**/{key}'), cache_path)
+
+        original_data = D_.get_original_data(key, size=len_org) # (2000, 512, 1024, 5)
+
+        train_data = D_.get_train_data(D_.extract_uvf_sigmoid(1.5),
+                                       original_data,
+                                       name='full_norm_uvf_sig15', cache=cache,
+                                       cache_path=cache_path)
+        if size:
+            return train_data[len_org-size:len_org]
+        return train_data
     return g_
 
 
@@ -94,8 +114,9 @@ def get_it(size=None):
 ################################################################################
 
 class TrainDataset(chainer.dataset.DatasetMixin):
-    def __init__(self, it):
+    def __init__(self, it, name=''):
         self.it = it
+        self.name = name
         self.count = 0
 
     def __len__(self):
@@ -103,7 +124,7 @@ class TrainDataset(chainer.dataset.DatasetMixin):
 
     def get_example(self, i):
         self.count += 1
-        print('get_example:', self.count, end='\r')
+        print(f'TrainDataset({self.name}):', self.count, end=' \r')
         a = self.it[i]
         return a, a
 
@@ -157,6 +178,11 @@ def velocity(frame):
 def vorticity0(frame):
     return frame[0, :-2, 1:-1] - frame[0, 2:, 1:-1] \
          - frame[1, 1:-1, :-2] + frame[1, 1:-1, 2:]
+
+
+def vorticity0_logit(frame, a=1):
+    return logit(frame[0, :-2, 1:-1], a) - logit(frame[0, 2:, 1:-1], a) \
+         - logit(frame[1, 1:-1, :-2], a) + logit(frame[1, 1:-1, 2:], a)
 
 
 def vorticity1(frame):
@@ -474,15 +500,39 @@ def check_data_range():
             'plate_00', 'plate_10', 'plate_20', 'plate_30')
     train_data = D_.MapChain(identity, *map(get_it(size=None), keys),
                              name='random_crop')
-    print('check: u')
-    for i in range(0, len(train_data), 200):
-        a = train_data[i][0, ...]
-        print(f'{i:5d} min: {a.min():.5f} max: {a.max():.5f} std: {a.std():.5f}')
+    pixels = np.prod(train_data[0][0].shape)
+    for d in range(2):
+        tmin, tmax = 0, 0
+        print('check:', 'uv'[d])
+        for i in range(0, len(train_data), 200):
+            a = train_data[i][d, ...] - (1 - d)
+            # a = sigmoid(a, 5)
+            amin = a.min()
+            amax = a.max()
+            amean = a.mean()
+            astd = a.std()
+            count = np.sum((-astd <= a) * (a <= astd))
+            # count = np.sum((-0.8 <= a) * (a <= 0.8))
+            ratio = count / pixels
+            tmin = min(tmin, amin)
+            tmax = max(tmax, amax)
+            print(f'{i:5d} min: {amin:8.5f} max: {amax:8.5f} mean: {amean:8.5f} std: {astd:8.5f} ratio: {ratio:8.5f}')
+        print(f'tmin: {tmin} tmax: {tmax}')
 
-    print('check: v')
+
+def check_data_hist():
+    keys = ('wing_00', 'wing_10', 'wing_20', 'wing_30',
+            'plate_00', 'plate_10', 'plate_20', 'plate_30')
+    train_data = D_.MapChain(identity, *map(get_it(size=None), keys))
+    fig, ax = plt.subplots()
+    d = 1
     for i in range(0, len(train_data), 200):
-        a = train_data[i][1, ...]
-        print(f'{i:5d} min: {a.min():.5f} max: {a.max():.5f} std: {a.std():.5f}')
+        data = (train_data[i][d] - (1 - d)).flatten()
+        data = sigmoid(data, 4)
+        ax.cla()
+        ax.hist(data, bins=100, range=(-2, 2))
+        plt.pause(0.1)
+    plt.show()
 
 
 ################################################################################
@@ -528,17 +578,21 @@ def __test__():
 def __test__():
     def printa(v):
         print(v.array)
-    a = np.arange(0, 1.1, 0.1)
-    x = chainer.Variable(a)
+    o = np.ones(5, dtype=np.float) * 0.01
+    a = np.arange(0.01, 0.6, 0.1)[:5]
+    x = chainer.Variable(o)
     t = chainer.Variable(a)
-    tb = chainer.Variable((t.array > 0.5).astype(np.float32)) * 0.999 + 0.0001
+    # tb = chainer.Variable((t.array > 0.5).astype(np.float32)) * 0.999 + 0.0001
     # b = F.sigmoid(a)
     b = NV_.D.Bernoulli(p=x)
     # # d = NV_.D.Bernoulli(p=b)
     l0 = b.log_prob(t)
     l1 = t * F.log(x) + (1 - t) * F.log(1 - x)
+    l2 = x * F.log(t) + (1 - x) * F.log(1 - t)
+    print(a)
     printa(l0)
     printa(l1)
+    printa(l2)
     # l1 = b.log_prob(tb)
     # print(x)
     # print(l0, F.sum(l0).array)
@@ -552,7 +606,7 @@ def __test__():
     # print(a.sum(axis=-1))
 
 
-def __test__():
+def __tes__():
     reporter = chainer.Reporter()
     observer = object()
     reporter.add_observer('my_observer', observer)
@@ -563,14 +617,6 @@ def __test__():
     # reporter.report({'loss': 0}, None)
     print(observation)
     print(dir(object))
-
-
-def __test__():
-    # a = np.random.rand(10000) * 0.1
-    # s = 1 / (1 + np.exp(-10 * a))
-    # print(a.std())
-    # print(s.std())
-    check_data_range()
 
 
 def get_args():
@@ -618,6 +664,12 @@ def main():
     if args.test:
         # print(vars(args))
         __test__()
+
+    elif args.mode  == '1':
+        check_data_range()
+
+    elif args.mode  == '2':
+        check_data_hist()
 
     elif args.mode in '0123456789':
         taskname = 'task' + args.mode

@@ -595,6 +595,7 @@ def get_model(name, sample=None):
 ################################################################################
 
 def plot_loss_ex(trainer):
+    return
     fig, ax = plt.subplots()
     for d in ['top', 'right']:
         ax.spines[d].set_visible(False)
@@ -645,7 +646,7 @@ def pause_ex(trainer):
 
 
 def train_model(model, train_iter, valid_iter, epoch=10, out='__result__',
-                init_file=None, fix_trained=False, alpha=0.001):
+                init_file=None, fix_trained=False, alpha=0.001, init_all=True):
     learner = model
 
     # 最適化手法の選択
@@ -691,7 +692,7 @@ def train_model(model, train_iter, valid_iter, epoch=10, out='__result__',
             return [f'{link.name}/{n}' for n in names]
 
         def register(keys, file_name):
-            trainer.extend(extensions.PlotReport(keys, x_key='epoch',
+            trainer.extend(extensions.PlotReport(keys,# x_key='epoch',
                                                  file_name=file_name,
                                                  marker=None))
 
@@ -744,11 +745,15 @@ def train_model(model, train_iter, valid_iter, epoch=10, out='__result__',
     if init_file:
         print('loading snapshot:', init_file)
         try:
-            chainer.serializers.load_npz(init_file, trainer)
+            if init_all:
+                chainer.serializers.load_npz(init_file, trainer)
 
+            else:
+                chainer.serializers.load_npz(init_file, learner,
+                                             path='updater/model:main/')
         except KeyError:
             raise
-            chainer.serializers.load_npz(init_file, trainer.updater, path='updater/')
+            # chainer.serializers.load_npz(init_file, trainer.updater, path='updater/')
 
     # 自作Extension
     trainer.extend(plot_loss_ex, trigger=(1, 'epoch'))

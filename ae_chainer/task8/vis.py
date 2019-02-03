@@ -92,8 +92,10 @@ def show_frame_filter(frames, tr=False, file=None):
     return show_frame_m(frames, fig, axes, file=file)
 
 
+################################################################################
+
 def plot_gray(frame, ax):
-    ax.imshow(frame, cmap='gray')
+    ax.imshow(frame, cmap='gray', vmin=0, vmax=1)
 
 
 def plot_red(frame, ax):
@@ -104,17 +106,20 @@ def plot_red(frame, ax):
 
 
 def plot_vel(frame, ax):
-    colors = [(0, '#000000'), (0.3, '#0000ff'), (0.5, '#ffffff'), (0.7, '#ff0000'), (1, '#000000')]
+    colors = [(0, '#000000'), (0.01, '#0000ff'), (0.5, '#ffffff'), (0.99, '#ff0000'), (1, '#000000')]
     cmap = plc.LinearSegmentedColormap.from_list('custom_cmap', colors)
     ax.imshow(frame, cmap=cmap, vmin=0.0, vmax=1.0)
 
 
 def plot_vor(frame, ax):
-    colors = [(0, '#000000'), (0.3, '#ff0000'), (0.5, '#ffffff'), (0.7, '#00ff00'), (1, '#000000')]
+    colors = [(0, '#000000'), (0.01, '#ff0000'), (0.5, '#ffffff'), (0.99, '#00ff00'), (1, '#000000')]
     # colors = [(0, '#ffffff'), (0.3, '#ff0000'), (0.5, '#000000'), (0.7, '#00ff00'), (1, '#ffffff')]
     cmap = plc.LinearSegmentedColormap.from_list('custom_cmap', colors)
-    ax.imshow(frame, cmap=cmap, vmin=-0.1, vmax=0.1)
+    # print('vor:', frame.min(), frame.max())
+    ax.imshow(frame, cmap=cmap, vmin=-0.2, vmax=0.2)
 
+
+################################################################################
 
 def show_frame_uvo(frames, file=None):
     fig, axes = plt.subplots(nrows=1, ncols=3)
