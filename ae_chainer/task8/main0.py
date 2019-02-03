@@ -69,7 +69,7 @@ def process0(casename, out):
     ''' オートエンコーダ学習 '''
 
     # 学習パラメータ定義
-    epoch = 100
+    epoch = 200
     batchsize = 50
     logdir = f'{out}/res_{casename}_{ut.snow}'
     model, _, train_iter, valid_iter = get_task_data(casename, batchsize)
@@ -77,14 +77,17 @@ def process0(casename, out):
                    alpha=0.01)
 
 
-def process0_resume(casename, out, init_all=True):
+def process0_resume(casename, out, init_all=True, new_out=False):
     ''' オートエンコーダ学習 '''
 
     # 学習パラメータ定義
-    epoch = 100
+    epoch = 200
     batchsize = 50
-    logdir = f'{out}/res_{casename}_{ut.snow}'
     init_file = MS_.check_snapshot(out)
+    if new_out:
+        logdir = f'{out}/res_{casename}_{ut.snow}'
+    else:
+        logdir = os.path.dirname(init_file)
     model, _, train_iter, valid_iter = get_task_data(casename, batchsize)
     M_.train_model(model, train_iter, valid_iter, epoch=epoch, out=logdir,
                    init_file=init_file, alpha=0.01, init_all=init_all)
@@ -98,12 +101,12 @@ def task0(*args, **kwargs):
     error = None
 
     try:
-        if kwargs.get('resume') == 'none':
-            process0(casename, out)
-
-        else:
+        if kwargs.get('resume'):
             init_all = not kwargs.get('resume', '').startswith('m')
             process0_resume(casename, out, init_all=init_all)
+
+        else:
+            process0(casename, out)
 
     except Exception as e:
         error = e
@@ -157,7 +160,8 @@ def get_args():
     # additional options
     parser.add_argument('--check-snapshot', '-s', action='store_true',
                         help='Print names in snapshot file')
-    parser.add_argument('--resume', '-r', default='none',# action='store_true',
+    parser.add_argument('--resume', '-r', nargs='?', const='all', default=None,
+                        choices=['', 'model', 'all'],
                         help='Resume with loading snapshot')
 
     # test option

@@ -18,8 +18,14 @@ def vorticity(frame):
 
 
 def vorticity_logit15(frame, a=1.5):
-    return C_.logit(frame[0, :-2, 1:-1], a) - C_.logit(frame[0, 2:, 1:-1], a) \
-         - C_.logit(frame[1, 1:-1, :-2], a) + C_.logit(frame[1, 1:-1, 2:], a)
+    return logit(frame[:, 0, :-2, 1:-1], a) \
+         - logit(frame[:, 0,  2:, 1:-1], a) \
+         - logit(frame[:, 1, 1:-1, :-2], a) \
+         + logit(frame[:, 1, 1:-1,  2:], a)
+
+
+def logit(x, a=1.5):
+    return C_.chainer_logit(x, a)
 
 
 class VAELoss(chainer.Chain, N_.AEBase):
@@ -53,9 +59,11 @@ class VAELoss(chainer.Chain, N_.AEBase):
         # 追加誤差関数
         # mse_vel = F.mean_squared_error(x_, p_x.mean)
         # mse_vor = F.mean_squared_error(*map(vorticity, (x_, p_x.mean)))
-        mse_vel = self.batch_mean(F.squared_error(x_, p_x.mean))
-        mse_vor = self.batch_mean(
-            F.squared_error(*map(vorticity_logit15, (x_, F.sigmoid(p_x.mean)))))
+        y = F.sigmoid(p_x.mean)
+        mse_vel = self.batch_mean(F.squared_error(*map(logit, (x_, y))))
+        mse_vor = self.batch_mean(F.squared_error(*map(vorticity_logit15,
+                                                       (x_, y))))
+
         reporter.report({'mse_vel': mse_vel}, self)
         reporter.report({'mse_vor': mse_vor}, self)
 
@@ -69,7 +77,7 @@ class VAELoss(chainer.Chain, N_.AEBase):
         reporter.report({'reconstr': reconstr}, self)
         reporter.report({'kl_penalty': kl_penalty}, self)
 
-        return loss + mse_vor
+        return loss
 
     def encode(self, x, **kwargs):
         q_z = self.predictor.encode(x, **kwargs)

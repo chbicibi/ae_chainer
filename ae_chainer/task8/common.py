@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import chainer
+import chainer.functions as F
 
 
 ################################################################################
@@ -60,3 +61,9 @@ def sigmoid(x, a=1):
 def logit(x, a=1):
     x_ = np.clip(x, 1e-8, 1 - 1e-8)
     return np.where((0 < x) * (x < 1), np.log(x_ / (1 - x_)) / a, np.nan)
+
+
+def chainer_logit(x, a=1):
+    # x_ = F.clip(x, 1e-8, 1 - 1e-8)
+    return F.log(x / (1 - x)) / a
+    # return F.where((0 < x) * (x < 1), F.log(x_ / (1 - x_)) / a, x * 0)

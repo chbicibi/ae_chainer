@@ -595,7 +595,6 @@ def get_model(name, sample=None):
 ################################################################################
 
 def plot_loss_ex(trainer):
-    return
     fig, ax = plt.subplots()
     for d in ['top', 'right']:
         ax.spines[d].set_visible(False)
@@ -626,10 +625,12 @@ def plot_loss_ex(trainer):
 
     finally:
         plt.close(fig)
+        sleep(10)
 
 
 def lr_drop_ex(alpha, start=1000):
     def f_(trainer):
+        return
         epoch = trainer.updater.epoch
         if epoch < start:
             return
@@ -641,7 +642,7 @@ def lr_drop_ex(alpha, start=1000):
 
 def pause_ex(trainer):
     while os.path.isfile(os.path.join(trainer.out, 'pause')):
-        print('pause', end='\r')
+        print('[pause]', end=' \r')
         sleep(10)
 
 
@@ -758,7 +759,7 @@ def train_model(model, train_iter, valid_iter, epoch=10, out='__result__',
     # 自作Extension
     trainer.extend(plot_loss_ex, trigger=(1, 'epoch'))
     trainer.extend(lr_drop_ex(alpha), trigger=(1, 'epoch'))
-    trainer.extend(pause_ex, trigger=(1, 'epoch'))
+    trainer.extend(pause_ex, trigger=(1, 'iteration'))
 
     # 学習を開始する
     trainer.run()
