@@ -40,15 +40,20 @@ def process4(casename, out):
     ''' モデル読み出し+可視化 '''
 
     file = MS_.check_snapshot(out)
-    N = 30
+    N = 500
 
     # 学習データ作成
     train_data_p10 = D_.MapChain(MS_.crop_front_sq, MS_.get_it(N)('plate_10'))
     # train_data_00 = D_.MapChain(MS_.crop_center_sq, MS_.get_it(10)('wing_00'))
-    train_data_10 = D_.MapChain(MS_.crop_front_sq, MS_.get_it(N)('wing_10'))
-    train_data_20 = D_.MapChain(MS_.crop_front_sq, MS_.get_it(N)('wing_20'))
-    train_data_30 = D_.MapChain(MS_.crop_front_sq, MS_.get_it(N)('wing_30'))
-    # train_data_30c = D_.MapChain(MS_.crop_center_sq, MS_.get_it(N)('wing_30'))
+
+    train_data_10 = D_.MapChain(MS_.crop_center_sq, MS_.get_it(N)('wing_10'))
+    train_data_20 = D_.MapChain(MS_.crop_center_sq, MS_.get_it(N)('wing_20'))
+    train_data_30 = D_.MapChain(MS_.crop_center_sq, MS_.get_it(N)('wing_30'))
+
+    train_data_10b = D_.MapChain(MS_.crop_back_sq, MS_.get_it(N)('wing_10'))
+    train_data_20b = D_.MapChain(MS_.crop_back_sq, MS_.get_it(N)('wing_20'))
+    train_data_30b = D_.MapChain(MS_.crop_back_sq, MS_.get_it(N)('wing_30'))
+
     train_data = train_data_10
 
     # モデル読み込み
@@ -69,7 +74,7 @@ def process4(casename, out):
                 if not l:
                     return
                 p = ax.plot(np.array(l))
-                fig.legend(p, list(map(str, range(64))))
+                # fig.legend(p, list(map(str, range(64))))
                 fig.savefig(f'z_test.png')
                 return
             ax.cla()
@@ -95,24 +100,28 @@ def process4(casename, out):
 
     x0 = model.xp.asarray(train_data_10[:1])
     x1 = model.xp.asarray(train_data_10[15:16]) # 移動
-    x2 = model.xp.asarray(train_data_20[15:16]) # 回転, 拡大
-    x3 = model.xp.asarray(train_data_30[15:16]) # 回転, 拡大
+    x2_1 = model.xp.asarray(train_data_20[0:1]) # 回転, 拡大
+    x2_2 = model.xp.asarray(train_data_20[15:16]) # 回転, 拡大
+    x3 = model.xp.asarray(train_data_30[0:1]) # 回転, 拡大
     # x2c = model.xp.asarray(train_data_30c[15:16]) # 回転, 拡大, 移動
     x0p = model.xp.asarray(train_data_p10[:1])
 
     z0 = enc(x0)
     z1 = enc(x1)
-    z2 = enc(x2)
+    z2_1 = enc(x2_1)
+    z2_2 = enc(x2_2)
     z3 = enc(x3)
     z0p = enc(x0p)
 
     ### Plot Case ###
-    # x_s0, x_s1 = x0, x1 # 渦移動
-    x_s0, x_s1 = x0, x3 # 翼回転
+    x_s0, x_s1 = x0, x1 # 渦移動1
+    # x_s0, x_s1 = x2_1, x2_2 # 渦移動2
+    # x_s0, x_s1 = x0, x3 # 翼回転
     # x_s0, x_s1 = x0, x2 # 翼回転2
     # x_s0, x_s1 = x0, x0p # 翼変形
 
-    # z_s0, z_s1 = z0, z1 # 渦移動
+    # z_s0, z_s1 = z0, z1 # 渦移動1
+    # z_s0, z_s1 = z2_1, z2_2 # 渦移動2
     z_s0, z_s1 = z0, z3 # 翼回転
     # z_s0, z_s1 = z0, z2 # 翼回転2
     # z_s0, z_s1 = z0, z0p # 翼変形
@@ -126,35 +135,43 @@ def process4(casename, out):
 
         fig, ax, plot_z = make_plot_z()
 
-        if False:
+        if True:
             plot_z(z0)
-            plot_z(z2)
-            plot_z(z3)
-            plot_z(z2*2-z0)
-            plot_z(z3-z2*2+z0)
+            plot_z(z1)
+            plot_z(z_diff)
+            # plot_z(z2*2-z0)
+            # plot_z(z3-z2*2+z0)
             # plot_z(z3-z2+z1)
             plot_z()
             return
 
         for i in range(0, 21):
             t = i / 20
-            print(f't={t}')
+            print(f't={t}', ' ' * 40, end='\r')
 
             # x = model.xp.asarray(train_data_30[i:i+1])
-            # z_base = enc(x)
-            # z = z_base + z_diff
+            x = model.xp.asarray(x3)
+            z_base = enc(x)
+            z = z_base + z_diff * 2
+            # y_base = dec(z_base)
+            y_diff = dec(z_diff)
+
             # y1 = dec(z_base)
             # y2 = dec(z)
             # plot_data = np.concatenate([x, y1.array, y2.array])
 
-            z = (1 - t) * z_s0 + t * z_s1
+            # z = (1 - t) * z_s0 + t * z_s1
             y = dec(z)
-            plot_data = np.concatenate([x_s0, y.array, x_s1])
+            print('*')
+            # plot_data = np.concatenate([x_s0, y.array, x_s1])
+
+            plot_data = np.concatenate([x, y.array])
 
             plot_z(z)
             V_.show_frame(plot_data, exf=exf,
                           file=f'recon_{casename}_{i:02d}.png')
             # plt.pause(0.001)
+            break
         plot_z()
 
 
@@ -212,9 +229,17 @@ def process4_1(casename, out):
         data = map(lambda f, d: lambda ax: f(d, ax),
                    (V_.plot_vel, V_.plot_vel, V_.plot_gray, V_.plot_vor),
                    (*frame, plotv(frame)))
+
+        # モノクロ
+        # data = map(lambda f, d: lambda ax: f(d, ax),
+        #            (V_.plot_gray, V_.plot_gray, V_.plot_gray),
+        #            frame)
         V_.show_frame_m(data, fig, axes, file=False)
 
-    anim(plot_, file='anim.mp4')
+    plot_(0)
+    fig.savefig('mono.png')
+
+    # anim(plot_, file='anim.mp4')
 
 
 def plot_cg(casename, out):
@@ -250,7 +275,26 @@ def task4(*args, **kwargs):
 ################################################################################
 
 def __test__():
-    pass
+    from scipy import stats
+    fig, ax = plt.subplots()
+    x = np.arange(-5, 5, 0.01)
+    y = stats.norm.pdf(x)
+    ax.plot(x, y)
+    plt.show()
+
+
+def __test__():
+    from scipy import stats
+    fig, ax = plt.subplots()
+    x = np.arange(0, 1, 0.01)
+
+    colors = [(0, '#ff0000'), (0.5, '#000000'), (1, '#00ff00')]
+    cmap = plc.LinearSegmentedColormap.from_list('custom_cmap', colors)
+
+    y = stats.norm.pdf(x)
+    ax.plot(x, vmin=0, vmax=1)
+    fig.colorbar()
+    plt.show()
 
 
 def get_args():

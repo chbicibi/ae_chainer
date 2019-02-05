@@ -628,14 +628,14 @@ def plot_loss_ex(trainer):
         sleep(10)
 
 
-def lr_drop_ex(alpha, start=1000):
+def lr_drop_ex(alpha, start=200):
     def f_(trainer):
-        return
         epoch = trainer.updater.epoch
         if epoch < start:
             return
         # trainer.updater.get_optimizer('main').alpha *= 0.1
-        alpha_new = alpha * max(0.8**max((epoch-start)//50+1, 0), 0.1)
+        # alpha_new = alpha * max(0.8**max((epoch-start)//50+1, 0), 0.1)
+        alpha_new = alpha * 0.1
         trainer.updater.get_optimizer('main').alpha = alpha_new
     return f_
 
@@ -762,7 +762,13 @@ def train_model(model, train_iter, valid_iter, epoch=10, out='__result__',
     trainer.extend(pause_ex, trigger=(1, 'iteration'))
 
     # 学習を開始する
-    trainer.run()
+    try:
+        trainer.run()
+    except:
+        print('trainer except')
+        raise
+    finally:
+        print('trainer end')
 
 
 ################################################################################

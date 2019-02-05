@@ -164,11 +164,16 @@ def crop_front_sq(frame):
     (:, 512, 1024) => (:, 384, 384)
     '''
     size = 384
-    p = [(r - size) // 2 for r in frame.shape[1:]]
-    p[1] = 128
+    p = [(frame.shape[1] - size) // 2, 128] # [(r - size) // 2 for r in frame.shape[1:]]
     a = frame[:, p[0]:p[0]+size, p[1]:p[1]+size]
     # a[2] = a[2] * (1 - 1e-5) + np.random.uniform(0, 1e-5, (384, 384))
     return a
+
+
+def crop_back_sq(frame):
+    size = 384
+    p = [(frame.shape[1] - size) // 2, frame.shape[2] - size]
+    return frame[:, p[0]:p[0]+size, p[1]:p[1]+size]
 
 
 def velocity(frame):

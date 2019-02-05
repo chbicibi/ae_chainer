@@ -69,7 +69,7 @@ def process0(casename, out):
     ''' オートエンコーダ学習 '''
 
     # 学習パラメータ定義
-    epoch = 200
+    epoch = 300
     batchsize = 50
     logdir = f'{out}/res_{casename}_{ut.snow}'
     model, _, train_iter, valid_iter = get_task_data(casename, batchsize)
@@ -81,7 +81,7 @@ def process0_resume(casename, out, init_all=True, new_out=False):
     ''' オートエンコーダ学習 '''
 
     # 学習パラメータ定義
-    epoch = 200
+    epoch = 300
     batchsize = 50
     init_file = MS_.check_snapshot(out)
     if new_out:
@@ -101,9 +101,11 @@ def task0(*args, **kwargs):
     error = None
 
     try:
-        if kwargs.get('resume'):
-            init_all = not kwargs.get('resume', '').startswith('m')
-            process0_resume(casename, out, init_all=init_all)
+        resume = kwargs.get('resume', '')
+        if resume:
+            init_all = not resume.startswith('m')
+            new_out = 'new' in resume
+            process0_resume(casename, out, init_all=init_all, new_out=new_out)
 
         else:
             process0(casename, out)
@@ -161,7 +163,7 @@ def get_args():
     parser.add_argument('--check-snapshot', '-s', action='store_true',
                         help='Print names in snapshot file')
     parser.add_argument('--resume', '-r', nargs='?', const='all', default=None,
-                        choices=['', 'model', 'all'],
+                        choices=['', 'model', 'all', 'modelnew', 'allnew'],
                         help='Resume with loading snapshot')
 
     # test option

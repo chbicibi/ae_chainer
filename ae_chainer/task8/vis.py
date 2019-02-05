@@ -48,12 +48,12 @@ def show_frame_m(frames, fig, axes, file=None):
     else:
         axes = np.array([axes])
 
-    fig.subplots_adjust(left=0, bottom=0, right=1, top=1, wspace=0.05, hspace=0.05)
+    fig.subplots_adjust(left=0.01, bottom=0, right=0.99, top=1, wspace=0.05, hspace=0.05)
     for ax in axes:
         ax.tick_params(left=False, labelleft=False,
                        bottom=None, labelbottom=False)
     # for ax in axes[len(frames):]:
-        remove_border(ax)
+        # remove_border(ax)
 
     colors = [(0, '#000000'), (1, '#ffffff')]
     cmap = plc.LinearSegmentedColormap.from_list('custom_cmap', colors)
@@ -106,17 +106,17 @@ def plot_red(frame, ax):
 
 
 def plot_vel(frame, ax):
-    colors = [(0, '#000000'), (0.01, '#0000ff'), (0.5, '#ffffff'), (0.99, '#ff0000'), (1, '#000000')]
+    colors = [(0, '#0000ff'), (0.01, '#0000ff'), (0.5, '#ffffff'), (0.99, '#ff0000'), (1, '#ff0000')]
     cmap = plc.LinearSegmentedColormap.from_list('custom_cmap', colors)
     ax.imshow(frame, cmap=cmap, vmin=0.0, vmax=1.0)
 
 
 def plot_vor(frame, ax):
-    colors = [(0, '#000000'), (0.01, '#ff0000'), (0.5, '#ffffff'), (0.99, '#00ff00'), (1, '#000000')]
+    colors = [(0, '#ff0000'), (0.01, '#ff0000'), (0.5, '#ffffff'), (0.99, '#00ff00'), (1, '#00ff00')]
     # colors = [(0, '#ffffff'), (0.3, '#ff0000'), (0.5, '#000000'), (0.7, '#00ff00'), (1, '#ffffff')]
     cmap = plc.LinearSegmentedColormap.from_list('custom_cmap', colors)
     # print('vor:', frame.min(), frame.max())
-    ax.imshow(frame, cmap=cmap, vmin=-0.2, vmax=0.2)
+    ax.imshow(frame, cmap=cmap, vmin=-0.1, vmax=0.1)
 
 
 ################################################################################
