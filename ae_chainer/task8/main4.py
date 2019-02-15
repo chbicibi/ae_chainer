@@ -84,7 +84,7 @@ def process4(casename, out):
             return z
         return fig, ax, plot_z
 
-    def apply(x):
+    def predict(x):
         with chainer.using_config('train', False), chainer.no_backprop_mode():
             return model.predict(x, inference=True)
 
@@ -120,22 +120,27 @@ def process4(casename, out):
     # x_s0, x_s1 = x0, x2 # 翼回転2
     # x_s0, x_s1 = x0, x0p # 翼変形
 
-    # z_s0, z_s1 = z0, z1 # 渦移動1
+    z_s0, z_s1 = z0, z1 # 渦移動1
     # z_s0, z_s1 = z2_1, z2_2 # 渦移動2
-    z_s0, z_s1 = z0, z3 # 翼回転
+    # z_s0, z_s1 = z0, z3 # 翼回転
     # z_s0, z_s1 = z0, z2 # 翼回転2
     # z_s0, z_s1 = z0, z0p # 翼変形
     # z_s0, z_s1 = 0.5 * (z0 + z3), z2 # 中間
-    z_diff = z1 - z0
+    # z_diff = z1 - z0
 
     with ut.chdir('__img__'):
-        V_.show_frame(x_s0[0], exf=exf, file=f'src_x0.png')
-        V_.show_frame(x_s1[0], exf=exf, file=f'src_x1.png')
+        # V_.show_frame(x_s0[0], exf=exf, file=f'src_x0.png')
+        # V_.show_frame(x_s1[0], exf=exf, file=f'src_x1.png')
         # return
 
-        fig, ax, plot_z = make_plot_z()
+        # fig, ax, plot_z = make_plot_z()
 
         if True:
+            V_.show_frame(x_s0[0], exf=None, file=f'src_x.png')
+            V_.show_frame(model.predict(x_s0)[0].array, exf=None, file=f'src_y.png')
+            return
+
+        if False:
             plot_z(z0)
             plot_z(z1)
             plot_z(z_diff)
@@ -146,33 +151,62 @@ def process4(casename, out):
             return
 
         for i in range(0, 21):
-            t = i / 20
+            t = i / 10 - 0.5
             print(f't={t}', ' ' * 40, end='\r')
 
-            # x = model.xp.asarray(train_data_30[i:i+1])
-            x = model.xp.asarray(x3)
-            z_base = enc(x)
-            z = z_base + z_diff * 2
-            # y_base = dec(z_base)
-            y_diff = dec(z_diff)
+            if False:
+                # 時間ステップが異なるサンプル間の補間
+                z = (1 - t) * z_s0 + t * z_s1
+                y = dec(z)
+                # plot_data = np.concatenate([y.array])
+                plot_data = y.array[0]
+                # plot_z(z)
+                V_.show_frame(plot_data, exf=exf,
+                              file=f'recon_case1_{casename}_{i:02d}_{t:.2f}.png')
+
+            if True:
+                # 迎角が異なるサンプル間の補間
+                z = (1 - t) * z_s0 + t * z_s1
+                y = dec(z)
+                # plot_data = np.concatenate([y.array])
+                plot_data = y.array[0]
+                # plot_z(z)
+                V_.show_frame(plot_data, exf=exf,
+                              file=f'recon_case2_{casename}_{i:02d}_{t:.2f}.png')
+
+            elif True:
+                X = model.xp.asarray(train_data_10[:20])
+                for i, y in enumerate(model.predict(X)):
+                    plot_data = y.array
+                    V_.show_frame(plot_data, exf=exf,
+                                  file=f'in_case1_{casename}_{i:02d}_{t:.2f}.png')
+                break
+
+            else:
+                y = predict(x)
+                # x = model.xp.asarray(train_data_30[i:i+1])
+                x = model.xp.asarray(x3)
+                z_base = enc(x)
+                z = z_base + z_diff * 2
+                # y_base = dec(z_base)
+                y_diff = dec(z_diff)
 
             # y1 = dec(z_base)
             # y2 = dec(z)
             # plot_data = np.concatenate([x, y1.array, y2.array])
 
             # z = (1 - t) * z_s0 + t * z_s1
-            y = dec(z)
-            print('*')
+            # y = dec(z)
+            # print('*')
             # plot_data = np.concatenate([x_s0, y.array, x_s1])
 
-            plot_data = np.concatenate([x, y.array])
+            # plot_data = np.concatenate([x, y.array])
 
-            plot_z(z)
-            V_.show_frame(plot_data, exf=exf,
-                          file=f'recon_{casename}_{i:02d}.png')
+            # plot_z(z)
+            # V_.show_frame(plot_data, exf=exf,
+            #               file=f'recon_{casename}_{i:02d}.png')
             # plt.pause(0.001)
-            break
-        plot_z()
+        # plot_z()
 
 
 def process4_1(casename, out):

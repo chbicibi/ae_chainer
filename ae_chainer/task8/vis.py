@@ -27,7 +27,11 @@ def extract_v(frame):
 
 def remove_border(ax):
     for d in ['top', 'bottom', 'left', 'right']:
-        ax.spines[d].set_visible(False)
+        ax.spines[d].set_visible(True)
+
+def show_border(ax):
+    for d in ['top', 'bottom', 'left', 'right']:
+        ax.spines[d].set_visible(True)
 
 
 def show_frame_vor(frame, file=None):
@@ -54,6 +58,7 @@ def show_frame_m(frames, fig, axes, file=None):
                        bottom=None, labelbottom=False)
     # for ax in axes[len(frames):]:
         # remove_border(ax)
+    # list(map(show_border, axes))
 
     colors = [(0, '#000000'), (1, '#ffffff')]
     cmap = plc.LinearSegmentedColormap.from_list('custom_cmap', colors)
@@ -63,6 +68,9 @@ def show_frame_m(frames, fig, axes, file=None):
             frame(ax)
         else:
             ax.imshow(frame, cmap=cmap, vmin=0)
+
+    remove_border(axes[2])
+    show_border(axes[2])
 
     if isinstance(file, str):
         fig.savefig(file, aspect='auto', bbox_inches='tight', pad_inches=0)
@@ -132,6 +140,9 @@ def show_frame_uvfo(frames, file=None):
     data = list(map(lambda f, d: lambda ax: f(d, ax),
                     (plot_vel, plot_vel, plot_gray, plot_vor),
                     frames))
+    # 追加
+    # list(map(show_border, axes))
+
     show_frame_m(data, fig, axes, file=file)
     plt.close(fig)
 

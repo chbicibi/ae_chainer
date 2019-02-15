@@ -3,6 +3,8 @@
 *.mp4
 *.png
 *.gif
+*.npy
+*.npz
 __*__
 __*__/
 config/
